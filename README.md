@@ -1,5 +1,6 @@
 # ChatSAV
 LLM-Powered Assistant for Evaluating Candidate Disease-Causing Splice-Altering Variants
+
 Genetic variants that disrupt pre-mRNA splicing (splice-altering variants or SAVs) are a frequent cause of genetic diseases, but most go undetected. The diagnostic process for SAVs begins with computational tools which score a patient’s millions of genetic variants to identify a manageable shortlist of candidate SAVs. Next, an analyst must manually evaluate each candidate to determine whether it warrants follow-up via an in vitro assay- a low throughput and costly process necessary for patient diagnosis. This investigation requires the analyst to assess:
 
 The likelihood of disruption to splicing based on prediction scores
