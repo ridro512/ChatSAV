@@ -1,7 +1,8 @@
 import requests
 
-def call_splice(variant):
-    base_url = "https://spliceai-38-xwkwwwxdwq-uc.a.run.app/spliceai/?hg=38&variant="
+#Potential Errors: User inputs a build that doesnt have a corresponding ts
+def call_splice(variant, hg):
+    base_url = f"https://spliceai-38-xwkwwwxdwq-uc.a.run.app/spliceai/?hg={hg}&variant="
     url = base_url + variant
 
     response = requests.get(url)
@@ -12,6 +13,7 @@ def call_splice(variant):
         for score_set in data.get("scores", []):
             transcript_result = {
                 "transcript_id": score_set.get("t_id"),
+                "gene_id": score_set.get("gene_id"),
                 "DS_AG": score_set.get("DS_AG"),
                 "DS_AL": score_set.get("DS_AL"),
                 "DS_DG": score_set.get("DS_DG"),
@@ -26,6 +28,8 @@ def call_splice(variant):
             "variant": variant,
             "splice_scores": results
         }
+    elif response.status_code == 503:
+        return f"Variant {variant} does not map to any transcript in the GRCh{hg} reference genome"
     else:
         return {
             "variant": variant,

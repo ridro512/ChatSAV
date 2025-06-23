@@ -10,7 +10,7 @@ sys.path.append(parent_dir)
 from callLlm import call_llm
 from callSplice import call_splice
 
-spliceai_data = call_splice("chr8:140300616:T:G")
+spliceai_data = call_splice("chr8:140300616:T:G", 38)
 
 gtex_data = {
     "whole_blood_tpm": 0.5,
