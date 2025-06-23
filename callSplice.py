@@ -1,6 +1,6 @@
 import requests
 
-def callSplice(variant):
+def call_splice(variant):
     base_url = "https://spliceai-38-xwkwwwxdwq-uc.a.run.app/spliceai/?hg=38&variant="
     url = base_url + variant
 
