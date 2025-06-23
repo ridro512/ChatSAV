@@ -1,3 +1,5 @@
+![image](https://github.com/user-attachments/assets/5ec8bf02-9ff5-41e0-bda5-4f571991a106)
+
 # ChatSAV
 LLM-Powered Assistant for Evaluating Candidate Disease-Causing Splice-Altering Variants
 
@@ -14,5 +16,13 @@ The proposed project is to build a software tool in which an LLM receives a quer
 Credits/Copyright: Dao K, Venkateswaran G, Rogers C, Zhao K
 
 # Installation
-
+The required packages are listed in requirements.txt. Program is ready to run straight away
 # Usage
+Input: Coordinates of a variant (chr:pos:ref:alt format)
+
+VARIANT FORMAT INFORMATION:
+- Chromosome: chr
+- Position: pos
+- Reference allele: ref
+- Alternate allele: alt
+
