@@ -1,4 +1,4 @@
 REQUIREMENTS:
    - pip install anthropic
-   - ANTHROPIC_API_KEY environment variable set
-   - Valid Claude API credits (taken care of with the key)
+   - ANTHROPIC_API_KEY environment variable set: $env:ANTHROPIC_API_KEY="sk-ant-your-actual-key-here"
+   - make sure that it set: echo $env:ANTHROPIC_API_KEY
