@@ -95,3 +95,6 @@ def main() -> None:
     
     # Display results
     print_results(llm_results, chrom, pos, ref, alt)
+    
+if __name__ == "__main__":
+    main()
