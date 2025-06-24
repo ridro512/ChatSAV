@@ -69,13 +69,20 @@ def main() -> None:
         "Please enter the variant coordinates in the format chr:pos:ref:alt "
         "(e.g., chr1:123456:A:T):\n"
     )
-    tissue = input("Please enter the tissue type (e.g., Whole_Blood):\n")
     
     # Parse variant coordinates
     chrom, pos, ref, alt = parse_variant_coordinates(variant_coord)
     
     # Call analysis functions
     spliceai_results = call_splice(variant_coord)
+
+    print("\nSpliceAI Results:")
+    print("=" * 50)
+    for key, value in spliceai_results.items():
+        print(f"{key}: {value}")
+
+    # for GTEx
+    tissue = input("Please enter the tissue type (e.g., Whole_Blood):\n")
     
     # TODO: Replace with actual GTEx call when implemented
     gtex_results = {
