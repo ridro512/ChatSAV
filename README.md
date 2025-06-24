@@ -13,7 +13,7 @@ Tissue-specific expression of the gene and splice isoforms
 Although much of this information is readily available, the analyst’s task is time-consuming and requires extensive domain expertise. Many researchers do not pursue candidate SAVs due to a lack of confidence navigating this complex analysis process, which we believe is highly amenable to assistance via a Large Language Model (LLM) agent. 
 
 The proposed project is to build a software tool in which an LLM receives a query genetic variant, gathers relevant data using existing APIs and datasets, and provides recommendations. The system would guide users through SAV evaluation, helping reduce the expertise barrier and streamline the diagnostic process. This project would enable students to gain significant experience with a rapidly emerging and important technology: developing LLM agentic systems.
-Credits/Copyright: Dao K, Venkateswaran G, Rogers C, Zhao K
+Credits/Copyright: Dao M, Venkateswaran G, Rogers C, Zhao K
 
 # Installation
 The required packages are listed in requirements.txt. Program is ready to run straight away
