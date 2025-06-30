@@ -1,10 +1,9 @@
 import requests
-from enstToEnsg import enst_to_ensg
+from typing import Tuple, Dict, Any, Optional
 
 #Potential Errors: User inputs a build that doesnt have a corresponding ts
-def call_splice(variant, hg):
-    base_url = f"https://spliceai-38-xwkwwwxdwq-uc.a.run.app/spliceai/?hg={hg}&variant="
-    url = base_url + variant
+def call_splice(variant, hg, distance, mask):
+    url = f"https://spliceai-38-xwkwwwxdwq-uc.a.run.app/spliceai/?hg={hg}&variant={variant}&distance={distance}&mask={mask}"
 
     response = requests.get(url)
 
@@ -23,7 +22,15 @@ def call_splice(variant, hg):
                 "DP_AL": score_set.get("DP_AL"),
                 "DP_DG": score_set.get("DP_DG"),
                 "DP_DL": score_set.get("DP_DL"),
-                "ensembl_id": enst_to_ensg(score_set.get("t_id")) 
+                "DS_AG_REF": score_set.get("DS_AG_REF"),
+                "DS_AG_ALT": score_set.get("DS_AG_ALT"),
+                "DS_AL_REF": score_set.get("DS_AL_REF"),
+                "DPDS_AL_ALT_DL": score_set.get("DS_AL_ALT"),
+                "DS_DG_REF": score_set.get("DS_DG_REF"),
+                "DS_DG_ALT": score_set.get("DS_DG_ALT"),
+                "DS_DL_REF": score_set.get("DS_DL_REF"),
+                "DS_DL_ALT": score_set.get("DS_DL_ALT"),
+                "ensembl_id": score_set.get("g_id") 
             }
             results.append(transcript_result)
         return {

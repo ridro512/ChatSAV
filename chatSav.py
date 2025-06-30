@@ -25,6 +25,8 @@ class ChatSAVPipeline:
     def __init__(self):
         self.variant_coord: Optional[str] = None
         self.hg: Optional[str] = None
+        self.distance: int = 50
+        self.mask: int = 0
         self.tissue: Optional[str] = None
         self.spliceai_results: Optional[Dict[str, Any]] = None
         self.gtex_results: Optional[Dict[str, Any]] = None
@@ -81,6 +83,34 @@ class ChatSAVPipeline:
                 break
             else:
                 print("Error: Please enter either '37' or '38'")
+            
+        while True:
+            dist = input(
+                "(Optional) Please enter the distance parameter of SpliceAI model (default: 50)"
+            ).strip()
+
+            try:
+                distance = int(dist)
+                self.distance = distance
+                print(f"✓ SpliceAI distance set: {distance}")
+                break
+            except ValueError:
+                print(f"{dist} is not a valid integer, defaulting to 50\n")
+                break
+            
+        while True:
+            mask = input(
+                "(Optional) Please enter if you would like raw or masked scores. Can be 0 which means raw scores or 1 which means masked scores (default: 0). Splicing changes corresponding to strengthening annotated splice sites and weakening unannotated splice sites are typically much less pathogenic than weakening annotated splice sites and strengthening unannotated splice sites. When this parameter is = 1 (masked), the delta scores of such splicing changes are set to 0. SpliceAI developers recommend using raw (0) for alternative splicing analysis and masked (1) for variant interpretation.\n"
+            ).strip()
+
+            try:
+                mask = int(mask)
+                self.mask = mask
+                print(f"✓ SpliceAI mask set: {mask}")
+                break
+            except ValueError:
+                print(f"{mask} is not a valid option, defaulting to raw scores 0\n")
+                break
 
     def get_spliceai_results(self) -> None:
         """Get SpliceAI results for the current variant."""
@@ -91,9 +121,11 @@ class ChatSAVPipeline:
             return
         
         print(f"Analyzing variant: {self.variant_coord} (GRCh{self.hg})")
+        print(f"Distance parameter: {self.distance}")
+        print(f"Mask parameter: {self.mask} (0 = raw score, 1 = masked score)")
         
         try:
-            self.spliceai_results = call_splice(self.variant_coord, self.hg)
+            self.spliceai_results = call_splice(self.variant_coord, self.hg, self.distance, self.mask)
             
             if 'error' in self.spliceai_results:
                 print(f"Error calling SpliceAI: {self.spliceai_results['error']}")
