@@ -2,8 +2,8 @@ import requests
 from typing import Tuple, Dict, Any, Optional
 
 #Potential Errors: User inputs a build that doesnt have a corresponding ts
-def call_splice(variant, hg, distance, mask):
-    url = f"https://spliceai-38-xwkwwwxdwq-uc.a.run.app/spliceai/?hg={hg}&variant={variant}&distance={distance}&mask={mask}"
+def call_pangolin(variant, hg, distance, mask):
+    url = f"https://pangolin-38-xwkwwwxdwq-uc.a.run.app/pangolin/?hg={hg}&variant={variant}&distance={distance}&mask={mask}"
 
     response = requests.get(url)
 
@@ -19,27 +19,19 @@ def call_splice(variant, hg, distance, mask):
                 "t_priority": score_set.get("t_priority"),  # Added missing transcript priority
                 "t_strand": score_set.get("t_strand"),  # Added missing strand
                 "t_refseq_ids": score_set.get("t_refseq_ids"),  # Added missing RefSeq IDs
-                "DS_AG": score_set.get("DS_AG"),
-                "DS_AL": score_set.get("DS_AL"),
-                "DS_DG": score_set.get("DS_DG"),
-                "DS_DL": score_set.get("DS_DL"),
-                "DP_AG": score_set.get("DP_AG"),
-                "DP_AL": score_set.get("DP_AL"),
-                "DP_DG": score_set.get("DP_DG"),
-                "DP_DL": score_set.get("DP_DL"),
-                "DS_AG_REF": score_set.get("DS_AG_REF"),
-                "DS_AG_ALT": score_set.get("DS_AG_ALT"),
-                "DS_AL_REF": score_set.get("DS_AL_REF"),
-                "DS_AL_ALT": score_set.get("DS_AL_ALT"),
-                "DS_DG_REF": score_set.get("DS_DG_REF"),
-                "DS_DG_ALT": score_set.get("DS_DG_ALT"),
-                "DS_DL_REF": score_set.get("DS_DL_REF"),
-                "DS_DL_ALT": score_set.get("DS_DL_ALT")
+                "DS_SG": score_set.get("DS_SG"),
+                "DS_SL": score_set.get("DS_SL"),
+                "DP_SG": score_set.get("DP_SG"),
+                "DP_SL": score_set.get("DP_SL"),
+                "SG_REF": score_set.get("SG_REF"),
+                "SG_ALT": score_set.get("SG_ALT"),
+                "SL_REF": score_set.get("SL_REF"),
+                "SL_ALT": score_set.get("SL_ALT")
             }
             results.append(transcript_result)
         return {
             "variant": variant,
-            "splice_scores": results
+            "pangolin_scores": results
         }
     elif response.status_code == 503:
         return f"Variant {variant} does not map to any transcript in the GRCh{hg} reference genome"
