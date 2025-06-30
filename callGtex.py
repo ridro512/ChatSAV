@@ -31,25 +31,25 @@ def call_gtex(gencode_ids, tissues):
                 "datasetId": "gtex_v8"
             }
 
-        try:
-            response = requests.get(url, params=params, timeout=200)
-            response.raise_for_status()
-            result = response.json()
-            data = result.get("data", [])
-            if not data:
-                # print(f"No expression data found for {gencode_id} in {tissue}.")
+            try:
+                response = requests.get(url, params=params, timeout=200)
+                response.raise_for_status()
+                result = response.json()
+                data = result.get("data", [])
+                if not data:
+                    # print(f"No expression data found for {gencode_id} in {tissue}.")
+                    results_list.append(None)
+                    continue
+    
+                median_tpm = data[0].get("median")
+                # print(f"Median expression (TPM) of {gencode_id} in {tissue}: {median_tpm}")
+                results_list.append(median_tpm)
+    
+            except requests.exceptions.RequestException as e:
+                print(f"Request failed: {e}")
                 results_list.append(None)
                 continue
-
-            median_tpm = data[0].get("median")
-            # print(f"Median expression (TPM) of {gencode_id} in {tissue}: {median_tpm}")
-            results_list.append(median_tpm)
-
-        except requests.exceptions.RequestException as e:
-            print(f"Request failed: {e}")
-            results_list.append(None)
-            continue
-    return results_list
+        return results_list
 
 # example call
 # if __name__ == "__main__":
