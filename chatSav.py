@@ -99,12 +99,63 @@ class ChatSAVPipeline:
                 print(f"Error calling SpliceAI: {self.spliceai_results['error']}")
             else:
                 print("\n✓ SpliceAI Results:")
-                print("=" * 50)
-                for key, value in self.spliceai_results.items():
-                    print(f"{key}: {value}")
+                print("=" * 60)
+                
+                print(f"Variant: {self.spliceai_results.get('variant')}")
+                
+                # Group by gene (since scores are usually the same per gene)
+                gene_groups = {}
+                for transcript in self.spliceai_results.get('splice_scores', []):
+                    gene_id = transcript.get('ensembl_id', 'Unknown')
+                    if gene_id not in gene_groups:
+                        gene_groups[gene_id] = {
+                            'scores': transcript,
+                            'transcripts': []
+                        }
+                    gene_groups[gene_id]['transcripts'].append(transcript.get('transcript_id'))
+                
+                for gene_id, data in gene_groups.items():
+                    print(f"\nGene: {gene_id}")
+                    print(f"Affected transcripts: {', '.join(data['transcripts'])}")
+                    print()
+                    
+                    print("Splice Disruption Scores:")
+                    print(f"  Acceptor Gain: {data['scores'].get('DS_AG')}")
+                    print(f"  Acceptor Loss: {data['scores'].get('DS_AL')}")
+                    print(f"  Donor Gain: {data['scores'].get('DS_DG')}")
+                    print(f"  Donor Loss: {data['scores'].get('DS_DL')}")
+                    print()
+                    
+                    print("Position Changes:")
+                    print(f"  Acceptor Gain: {data['scores'].get('DP_AG')}")
+                    print(f"  Acceptor Loss: {data['scores'].get('DP_AL')}")
+                    print(f"  Donor Gain: {data['scores'].get('DP_DG')}")
+                    print(f"  Donor Loss: {data['scores'].get('DP_DL')}")
+                    print()
+                    
+                    # Highlight significant scores (>0.5)
+                    significant = []
+                    for score_type, label in [
+                        ('DS_AG', 'Acceptor Gain'),
+                        ('DS_AL', 'Acceptor Loss'), 
+                        ('DS_DG', 'Donor Gain'),
+                        ('DS_DL', 'Donor Loss')
+                    ]:
+                        score = float(data['scores'].get(score_type, 0))
+                        if score > 0.5:
+                            significant.append(f"{label} ({score})")
+                    
+                    if significant:
+                        print(f"Significant scores (>0.5): {', '.join(significant)}")
+                    else:
+                        print("No significant splice disruption predicted (all scores ≤0.5)")
+                    
+                    print("-" * 60)
                 
         except Exception as e:
             print(f"Error: Failed to get SpliceAI results: {e}")
+
+
 
     def select_tissue_type(self) -> None:
         """Select tissue type for GTEx analysis."""
