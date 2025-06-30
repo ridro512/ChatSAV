@@ -28,6 +28,7 @@ class ChatSAVPipeline:
         self.tissue: Optional[str] = None
         self.spliceai_results: Optional[Dict[str, Any]] = None
         self.gtex_results: Optional[Dict[str, Any]] = None
+        self.context: Optional[str] = None
         self.chrom: Optional[str] = None
         self.pos: Optional[int] = None
         self.ref: Optional[str] = None
@@ -163,6 +164,18 @@ class ChatSAVPipeline:
         except Exception as e:
             print(f"Error: Failed to get GTEx results: {e}")
 
+    def input_context(self) -> None:
+        "Provide context to the LLM to tweak query/output"
+        print("\n--- Context for LLM ---")
+
+        context = input("\nPlease enter context you would like to provide to the LLM\n")
+        if context:
+            self.context = context
+            print(f"✓ Context")
+        else:
+            print("Error: No context detected")
+        
+
     def get_llm_results(self) -> None:
         """Get LLM analysis in natural language."""
         print("\n--- Getting LLM Analysis ---")
@@ -183,6 +196,7 @@ class ChatSAVPipeline:
                 self.pos, 
                 self.ref, 
                 self.alt, 
+                self.context,
                 model="claude-3-5-sonnet-20241022"
             )
             
@@ -269,7 +283,8 @@ class ChatSAVPipeline:
         print("3. Select tissue type")
         print("4. Get GTEx results")
         print("5. Get LLM analysis in natural language")
-        print("6. Chat with LLM")
+        print("6. Input context for LLM")
+        print("7. Chat with LLM")
         print("0. Exit")
         print("-" * 60)
         
@@ -292,6 +307,8 @@ class ChatSAVPipeline:
                         self.get_gtex_results()
                     case "5":
                         self.get_llm_results()
+                    case "6":
+                        self.input_context()
                     case "6":
                         self.chat_with_llm()
                     case "0":
