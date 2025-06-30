@@ -248,7 +248,7 @@ class ChatSAVPipeline:
                 self.ref, 
                 self.alt, 
                 self.context,
-                model="claude-3-5-sonnet-20241022"
+                model="gpt-4.1-nano"
             )
             
             self.print_results(llm_results)
