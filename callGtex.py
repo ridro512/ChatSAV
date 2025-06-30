@@ -18,6 +18,7 @@ def call_gtex(gencode_ids, tissue):
 
     Returns:
         float or None: Median TPM value if found, otherwise None.
+        splice junctions and exons
     """
     results_list = []
     for gencode_id in gencode_ids:

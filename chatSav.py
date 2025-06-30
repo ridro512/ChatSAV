@@ -12,100 +12,307 @@ VARIANT FORMAT INFORMATION:
 - Alternate allele: alt
 """
 
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
 
 from callSplice import call_splice
 # from callGtex import call_gtex  # results of GTEx whole blood expression
 from callLlm import call_llm
 
 
-def parse_variant_coordinates(variant_coord: str) -> Tuple[str, int, str, str]:
-    """
-    Parse variant coordinates from string format.
+class ChatSAVPipeline:
+    """Main pipeline class for ChatSAV analysis."""
     
-    Args:
-        variant_coord: Variant in format "chr:pos:ref:alt"
+    def __init__(self):
+        self.variant_coord: Optional[str] = None
+        self.hg: Optional[str] = None
+        self.tissue: Optional[str] = None
+        self.spliceai_results: Optional[Dict[str, Any]] = None
+        self.gtex_results: Optional[Dict[str, Any]] = None
+        self.chrom: Optional[str] = None
+        self.pos: Optional[int] = None
+        self.ref: Optional[str] = None
+        self.alt: Optional[str] = None
+
+    def parse_variant_coordinates(self, variant_coord: str) -> Tuple[str, int, str, str]:
+        """
+        Parse variant coordinates from string format.
         
-    Returns:
-        Tuple of (chromosome, position, reference_allele, alternate_allele)
-    """
-    chrom, pos, ref, alt = variant_coord.split(":")
-    return chrom, int(pos), ref, alt
+        Args:
+            variant_coord: Variant in format "chr:pos:ref:alt"
+            
+        Returns:
+            Tuple of (chromosome, position, reference_allele, alternate_allele)
+        """
+        try:
+            chrom, pos, ref, alt = variant_coord.split(":")
+            return chrom, int(pos), ref, alt
+        except ValueError as e:
+            raise ValueError(f"Invalid variant format. Expected 'chr:pos:ref:alt', got '{variant_coord}'") from e
 
+    def input_variant_coordinates(self) -> None:
+        """Get variant coordinates and genome build from user."""
+        print("\n--- Input Variant Coordinates ---")
+        
+        while True:
+            variant_coord = input(
+                "Please enter the variant coordinates in the format chr:pos:ref:alt "
+                "(e.g., chr1:123456:A:T):\n"
+            ).strip()
+            
+            try:
+                chrom, pos, ref, alt = self.parse_variant_coordinates(variant_coord)
+                self.variant_coord = variant_coord
+                self.chrom, self.pos, self.ref, self.alt = chrom, pos, ref, alt
+                print(f"✓ Variant coordinates set: {variant_coord}")
+                break
+            except ValueError as e:
+                print(f"Error: {e}")
+                print("Please try again.")
+        
+        while True:
+            hg = input(
+                "Please enter the genome build [37 for GRCh37/hg19] or [38 for GRCh38/hg38]:\n"
+            ).strip()
+            
+            if hg in ["37", "38"]:
+                self.hg = hg
+                print(f"✓ Genome build set: GRCh{hg}")
+                break
+            else:
+                print("Error: Please enter either '37' or '38'")
 
-def print_results(llm_results: Dict[str, Any], chrom: str, pos: int, ref: str, alt: str) -> None:
-    """
-    Print formatted analysis results.
-    
-    Args:
-        llm_results: Dictionary containing LLM analysis results
-        chrom: Chromosome
-        pos: Position
-        ref: Reference allele
-        alt: Alternate allele
-    """
-    print(f"\nResult of a mutation of {ref} > {alt} at position {pos} on chromosome {chrom}")
-    print("=" * 60)
-    
-    print(f"Priority: {llm_results['priority_level']}")
-    print(f"Assessment: {llm_results['pathogenicity_assessment']}")
-    print(f"Recommendations: {llm_results['experimental_recommendations']}")
-    
-    if 'error' in llm_results:
-        print(f"\nError: {llm_results['error']}")
-    else:
-        print("\nFull Analysis:")
-        print("-" * 40)
-        print(llm_results['llm_interpretation'])
+    def get_spliceai_results(self) -> None:
+        """Get SpliceAI results for the current variant."""
+        print("\n--- Getting SpliceAI Results ---")
+        
+        if not self.variant_coord or not self.hg:
+            print("Error: Please input variant coordinates first (Option 1)")
+            return
+        
+        print(f"Analyzing variant: {self.variant_coord} (GRCh{self.hg})")
+        
+        try:
+            self.spliceai_results = call_splice(self.variant_coord, self.hg)
+            
+            if 'error' in self.spliceai_results:
+                print(f"Error calling SpliceAI: {self.spliceai_results['error']}")
+            else:
+                print("\n✓ SpliceAI Results:")
+                print("=" * 50)
+                for key, value in self.spliceai_results.items():
+                    print(f"{key}: {value}")
+                
+        except Exception as e:
+            print(f"Error: Failed to get SpliceAI results: {e}")
+
+    def select_tissue_type(self) -> None:
+        """Select tissue type for GTEx analysis."""
+        print("\n--- Tissue Type Selection ---")
+        
+        print("Available tissue types (examples):")
+        print("- Whole_Blood")
+        print("- Brain_Cortex")
+        print("- Heart_Left_Ventricle")
+        print("- Liver")
+        print("- Lung")
+        print("- Muscle_Skeletal")
+        print("- Skin_Sun_Exposed_Lower_leg")
+        
+        tissue = input("\nPlease enter the tissue type (e.g., Whole_Blood):\n").strip()
+        
+        if tissue:
+            self.tissue = tissue
+            print(f"✓ Tissue type set: {tissue}")
+        else:
+            print("Error: Please enter a valid tissue type")
+
+    def get_gtex_results(self) -> None:
+        """Get GTEx expression results for the current variant and tissue."""
+        print("\n--- Getting GTEx Results ---")
+        
+        if not self.tissue:
+            print("Error: Please select tissue type first (Option 3)")
+            return
+        
+        if not self.variant_coord:
+            print("Error: Please input variant coordinates first (Option 1)")
+            return
+        
+        print(f"Analyzing expression in {self.tissue} for variant: {self.variant_coord}")
+        
+        try:
+            # TODO: Replace with actual GTEx call when implemented
+            # self.gtex_results = call_gtex(self.variant_coord, self.tissue)
+            
+            # Placeholder results for now
+            self.gtex_results = {
+                "tissue": self.tissue,
+                "tpm": 0.5,
+                "expressed": False,
+                "percentile": 25
+            }
+            
+            if 'error' in self.gtex_results:
+                print(f"Error calling GTEx: {self.gtex_results['error']}")
+            else:
+                print("\n✓ GTEx Results:")
+                print("=" * 50)
+                for key, value in self.gtex_results.items():
+                    print(f"{key}: {value}")
+                
+        except Exception as e:
+            print(f"Error: Failed to get GTEx results: {e}")
+
+    def get_llm_results(self) -> None:
+        """Get LLM analysis in natural language."""
+        print("\n--- Getting LLM Analysis ---")
+        
+        if not self.spliceai_results:
+            print("Error: Please get SpliceAI results first (Option 2)")
+            return
+        
+        if not self.gtex_results:
+            print("Error: Please get GTEx results first (Option 4)")
+            return
+        
+        try:
+            llm_results = call_llm(
+                self.spliceai_results, 
+                self.gtex_results, 
+                self.chrom, 
+                self.pos, 
+                self.ref, 
+                self.alt, 
+                model="claude-3-5-sonnet-20241022"
+            )
+            
+            self.print_results(llm_results)
+            
+        except Exception as e:
+            print(f"Error: Failed to get LLM analysis: {e}")
+
+    def chat_with_llm(self) -> None:
+        """Interactive chat with LLM about the variant."""
+        print("\n--- Chat with LLM ---")
+        
+        if not self.variant_coord:
+            print("Error: Please input variant coordinates first (Option 1)")
+            return
+        
+        print(f"Chatting about variant: {self.variant_coord}")
+        print("Type 'exit' to return to main menu")
+        
+        while True:
+            user_input = input("\nYour question: ").strip()
+            
+            if user_input.lower() in ['exit', 'quit', 'back']:
+                break
+            
+            if not user_input:
+                continue
+            
+            try:
+                # TODO: Implement chat functionality with LLM
+                # For now, provide a placeholder response
+                print("LLM: This is a placeholder response. Chat functionality will be implemented with the full LLM integration.")
+                
+            except Exception as e:
+                print(f"Error: {e}")
+
+    def print_results(self, llm_results: Dict[str, Any]) -> None:
+        """
+        Print formatted analysis results.
+        
+        Args:
+            llm_results: Dictionary containing LLM analysis results
+        """
+        print(f"\nResult of a mutation of {self.ref} > {self.alt} at position {self.pos} on chromosome {self.chrom}")
+        print("=" * 80)
+        
+        print(f"Priority: {llm_results.get('priority_level', 'N/A')}")
+        print(f"Assessment: {llm_results.get('pathogenicity_assessment', 'N/A')}")
+        print(f"Recommendations: {llm_results.get('experimental_recommendations', 'N/A')}")
+        
+        if 'error' in llm_results:
+            print(f"\nError: {llm_results['error']}")
+        else:
+            print("\nFull Analysis:")
+            print("-" * 40)
+            print(llm_results.get('llm_interpretation', 'No interpretation available'))
+
+    def display_menu(self) -> str:
+        """Display the main menu and get user choice."""
+        print("\n" + "=" * 60)
+        print("Welcome to ChatSAV")
+        print("This assistant analyses splice-altering variants (SAVs) using SpliceAI and GTEx data.")
+        print("=" * 60)
+        
+        # Show current state
+        status = []
+        if self.variant_coord:
+            status.append(f"✓ Variant: {self.variant_coord} (GRCh{self.hg})")
+        if self.tissue:
+            status.append(f"✓ Tissue: {self.tissue}")
+        if self.spliceai_results:
+            status.append("✓ SpliceAI results available")
+        if self.gtex_results:
+            status.append("✓ GTEx results available")
+        
+        if status:
+            print("\nCurrent Status:")
+            for s in status:
+                print(f"  {s}")
+        
+        print("\nPlease select an option:")
+        print("1. Input variant coordinates")
+        print("2. Get SpliceAI results")
+        print("3. Select tissue type")
+        print("4. Get GTEx results")
+        print("5. Get LLM analysis in natural language")
+        print("6. Chat with LLM")
+        print("0. Exit")
+        print("-" * 60)
+        
+        return input("Your choice: ").strip()
+
+    def run(self) -> None:
+        """Main execution loop."""
+        while True:
+            choice = self.display_menu()
+            
+            try:
+                match choice:
+                    case "1":
+                        self.input_variant_coordinates()
+                    case "2":
+                        self.get_spliceai_results()
+                    case "3":
+                        self.select_tissue_type()
+                    case "4":
+                        self.get_gtex_results()
+                    case "5":
+                        self.get_llm_results()
+                    case "6":
+                        self.chat_with_llm()
+                    case "0":
+                        print("\nThank you for using ChatSAV!")
+                        break
+                    case _:
+                        print("Invalid choice. Please select a number from 0-6.")
+            
+            except KeyboardInterrupt:
+                print("\n\nExiting ChatSAV...")
+                break
+            except Exception as e:
+                print(f"\nAn unexpected error occurred: {e}")
+                print("Please try again or contact support if the problem persists.")
 
 
 def main() -> None:
     """Main function to run the ChatSAV analysis."""
-    print("Welcome to ChatSAV")
-    print("This assistant analyses splice-altering variants (SAVs) using SpliceAI and GTEx data.")
-    
-    # Get user input
-    variant_coord = input(
-        "Please enter the variant coordinates in the format chr:pos:ref:alt "
-        "(e.g., chr1:123456:A:T):\n"
-    )
-    hg = input(
-        "Please enter the genome build [37 for GRCh37/hg19] or [38 for GRCh38/hg38]:\n"
-    )
-    tissue = input("Please enter the tissue type (e.g., Whole_Blood):\n")
-    
-    # Parse variant coordinates
-    chrom, pos, ref, alt = parse_variant_coordinates(variant_coord)
-    
-    # Call analysis functions
-    spliceai_results = call_splice(variant_coord, hg)
+    pipeline = ChatSAVPipeline()
+    pipeline.run()
 
-    print("\nSpliceAI Results:")
-    print("=" * 50)
-    for key, value in spliceai_results.items():
-        print(f"{key}: {value}")
 
-    # for GTEx
-    tissue = input("Please enter the tissue type (e.g., Whole_Blood):\n")
-    
-    # TODO: Replace with actual GTEx call when implemented
-    gtex_results = {
-        "whole_blood_tpm": 0.5,
-        "expressed_in_whole_blood": False
-    }
-    
-    llm_results = call_llm(
-        spliceai_results, 
-        gtex_results, 
-        chrom, 
-        pos, 
-        ref, 
-        alt, 
-        model="claude-3-5-sonnet-20241022"
-    )
-    
-    # Display results
-    print_results(llm_results, chrom, pos, ref, alt)
-    
 if __name__ == "__main__":
     main()
