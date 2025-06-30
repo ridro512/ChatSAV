@@ -6,14 +6,15 @@ Input:
 Output: GTEx whole blood expression status
 """
 import requests
+from typing import List, Dict, Any, Optional
 
-def call_gtex(gencode_ids, tissue):
+def call_gtex(gencode_ids, tissues):
     """
     Query the GTEx API to check median transcript expression in a specific tissue.
 
     Args:
         gencode_id (list[str]): Versioned GENCODE IDs (e.g. 'ENSG00000123456.15').
-        tissue (str): GTEx tissue site ID (e.g. 'Whole_Blood').
+        tissue (list[str]): GTEx tissue site IDs (e.g. 'Whole_Blood').
         dataset_id (str): Dataset ID (default is 'gtex_v8').
 
     Returns:
@@ -22,12 +23,13 @@ def call_gtex(gencode_ids, tissue):
     """
     results_list = []
     for gencode_id in gencode_ids:
-        url = "https://gtexportal.org/api/v2/expression/medianGeneExpression"
-        params = {
-            "gencodeId": [gencode_id],
-            "tissueSiteDetailId": [tissue],
-            "datasetId": "gtex_v8"
-        }
+        for tissue in tissues:
+            url = "https://gtexportal.org/api/v2/expression/medianGeneExpression"
+            params = {
+                "gencodeId": [gencode_id],
+                "tissueSiteDetailId": [tissue],
+                "datasetId": "gtex_v8"
+            }
 
         try:
             response = requests.get(url, params=params, timeout=200)

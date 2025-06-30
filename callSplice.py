@@ -1,4 +1,5 @@
 import requests
+from enstToEnsg import enst_to_ensg
 
 #Potential Errors: User inputs a build that doesnt have a corresponding ts
 def call_splice(variant, hg):
@@ -21,7 +22,8 @@ def call_splice(variant, hg):
                 "DP_AG": score_set.get("DP_AG"),
                 "DP_AL": score_set.get("DP_AL"),
                 "DP_DG": score_set.get("DP_DG"),
-                "DP_DL": score_set.get("DP_DL")
+                "DP_DL": score_set.get("DP_DL"),
+                "ensembl_id": enst_to_ensg(score_set.get("t_id")) 
             }
             results.append(transcript_result)
         return {
