@@ -17,6 +17,7 @@ from typing import Tuple, Dict, Any, Optional
 from callSplice import call_splice
 # from callGtex import call_gtex  # results of GTEx whole blood expression
 from callLlm import call_llm
+from callPangolin import call_pangolin
 
 
 class ChatSAVPipeline:
@@ -29,12 +30,17 @@ class ChatSAVPipeline:
         self.mask: int = 0
         self.tissue: Optional[str] = None
         self.spliceai_results: Optional[Dict[str, Any]] = None
+        self.pangolin_results: Optional[Dict[str, Any]] = None
         self.gtex_results: Optional[Dict[str, Any]] = None
         self.context: Optional[str] = None
         self.chrom: Optional[str] = None
         self.pos: Optional[int] = None
         self.ref: Optional[str] = None
         self.alt: Optional[str] = None
+
+    def wait_for_user(self) -> None:
+        """Wait for user to press a key before continuing."""
+        input("\nPress Enter to return to main menu...")
 
     def parse_variant_coordinates(self, variant_coord: str) -> Tuple[str, int, str, str]:
         """
@@ -148,7 +154,13 @@ class ChatSAVPipeline:
                 
                 for gene_id, data in gene_groups.items():
                     print(f"\nGene: {gene_id}")
+                    print(f"Gene name: {data['scores'].get('g_name', 'N/A')}")
                     print(f"Affected transcripts: {', '.join(data['transcripts'])}")
+                    print(f"Transcript type: {data['scores'].get('t_type', 'N/A')}")
+                    print(f"Transcript priority: {data['scores'].get('t_priority', 'N/A')}")
+                    print(f"Strand: {data['scores'].get('t_strand', 'N/A')}")
+                    if data['scores'].get('t_refseq_ids'):
+                        print(f"RefSeq IDs: {', '.join(data['scores'].get('t_refseq_ids', []))}")
                     print()
                     
                     print("Splice Disruption Scores:")
@@ -193,7 +205,106 @@ class ChatSAVPipeline:
                 
         except Exception as e:
             print(f"Error: Failed to get SpliceAI results: {e}")
+        
+        self.wait_for_user()
 
+    def get_pangolin_results(self) -> None:
+        """Get Pangolin results for the current variant."""
+        print("\n--- Getting Pangolin Results ---")
+        
+        if not self.variant_coord or not self.hg:
+            print("Error: Please input variant coordinates first (Option 1)")
+            return
+        
+        print(f"Analyzing variant: {self.variant_coord} (GRCh{self.hg})")
+        print(f"Distance parameter: {self.distance}")
+        print(f"Mask parameter: {self.mask} (0 = raw score, 1 = masked score)")
+        
+        try:
+            self.pangolin_results = call_pangolin(self.variant_coord, self.hg, self.distance, self.mask)
+            
+            if 'error' in self.pangolin_results:
+                print(f"Error calling Pangolin: {self.pangolin_results['error']}")
+            else:
+                print("\n✓ Pangolin Results:")
+                print("=" * 60)
+                
+                print(f"Variant: {self.pangolin_results.get('variant')}")
+                
+                # Group by gene (since scores are usually the same per gene)
+                gene_groups = {}
+                for transcript in self.pangolin_results.get('pangolin_scores', []):
+                    gene_id = transcript.get('ensembl_id', 'Unknown')
+                    if gene_id not in gene_groups:
+                        gene_groups[gene_id] = {
+                            'scores': transcript,
+                            'transcripts': []
+                        }
+                    gene_groups[gene_id]['transcripts'].append(transcript.get('transcript_id'))
+                
+                for gene_id, data in gene_groups.items():
+                    print(f"\nGene: {gene_id}")
+                    print(f"Gene name: {data['scores'].get('g_name', 'N/A')}")
+                    print(f"Affected transcripts: {', '.join(data['transcripts'])}")
+                    print(f"Transcript type: {data['scores'].get('t_type', 'N/A')}")
+                    print(f"Transcript priority: {data['scores'].get('t_priority', 'N/A')}")
+                    print(f"Strand: {data['scores'].get('t_strand', 'N/A')}")
+                    if data['scores'].get('t_refseq_ids'):
+                        print(f"RefSeq IDs: {', '.join(data['scores'].get('t_refseq_ids', []))}")
+                    print()
+                    
+                    print("Splice Disruption Scores:")
+                    print(f"  Splice Gain: {data['scores'].get('DS_SG')}")
+                    print(f"  Splice Loss: {data['scores'].get('DS_SL')}")
+                    print()
+                    
+                    print("Reference vs Alternative Scores:")
+                    print(f"  Splice Gain - REF: {data['scores'].get('SG_REF')} | ALT: {data['scores'].get('SG_ALT')}")
+                    print(f"  Splice Loss - REF: {data['scores'].get('SL_REF')} | ALT: {data['scores'].get('SL_ALT')}")
+                    print()
+                    
+                    print("Position Changes:")
+                    print(f"  Splice Gain: {data['scores'].get('DP_SG')}")
+                    print(f"  Splice Loss: {data['scores'].get('DP_SL')}")
+                    print()
+                    
+                    # Highlight significant scores (>0.5)
+                    significant = []
+                    for score_type, label in [
+                        ('DS_SG', 'Splice Gain'),
+                        ('DS_SL', 'Splice Loss')
+                    ]:
+                        score_val = data['scores'].get(score_type)
+                        if score_val is not None:
+                            try:
+                                score = float(score_val)
+                                if abs(score) > 0.5:  # Use abs() since splice loss can be negative
+                                    significant.append(f"{label} ({score})")
+                            except (ValueError, TypeError):
+                                pass
+                    
+                    if significant:
+                        print(f"Significant scores (|score| > 0.5): {', '.join(significant)}")
+                    else:
+                        print("No significant splice disruption predicted (all |scores| ≤ 0.5)")
+                    
+                    # Show all non-zero scores if available
+                    if self.pangolin_results.get('allNonZeroScores'):
+                        print(f"\nAll affected positions within {self.distance}bp:")
+                        for pos_data in self.pangolin_results['allNonZeroScores']:
+                            pos = pos_data.get('pos')
+                            sg_ref = pos_data.get('SG_REF')
+                            sg_alt = pos_data.get('SG_ALT')
+                            sl_ref = pos_data.get('SL_REF')
+                            sl_alt = pos_data.get('SL_ALT')
+                            print(f"  Position {pos}: SG({sg_ref}→{sg_alt}) SL({sl_ref}→{sl_alt})")
+                    
+                    print("-" * 60)
+                
+        except Exception as e:
+            print(f"Error: Failed to get Pangolin results: {e}")
+
+        self.wait_for_user()
 
 
     def select_tissue_type(self) -> None:
@@ -216,6 +327,8 @@ class ChatSAVPipeline:
             print(f"✓ Tissue type set: {tissue}")
         else:
             print("Error: Please enter a valid tissue type")
+
+        self.wait_for_user()
 
     def get_gtex_results(self) -> None:
         """Get GTEx expression results for the current variant and tissue."""
@@ -253,6 +366,8 @@ class ChatSAVPipeline:
                 
         except Exception as e:
             print(f"Error: Failed to get GTEx results: {e}")
+
+        self.wait_for_user()
 
     def input_context(self) -> None:
         "Provide context to the LLM to tweak query/output"
@@ -294,6 +409,8 @@ class ChatSAVPipeline:
             
         except Exception as e:
             print(f"Error: Failed to get LLM analysis: {e}")
+
+        self.wait_for_user()
 
     def chat_with_llm(self) -> None:
         """Interactive chat with LLM about the variant."""
@@ -359,6 +476,8 @@ class ChatSAVPipeline:
             status.append(f"✓ Tissue: {self.tissue}")
         if self.spliceai_results:
             status.append("✓ SpliceAI results available")
+        if self.pangolin_results:
+            status.append("✓ Pangolin results available")
         if self.gtex_results:
             status.append("✓ GTEx results available")
         
@@ -370,11 +489,12 @@ class ChatSAVPipeline:
         print("\nPlease select an option:")
         print("1. Input variant coordinates")
         print("2. Get SpliceAI results")
-        print("3. Select tissue type")
-        print("4. Get GTEx results")
-        print("5. Get LLM analysis in natural language")
-        print("6. Input context for LLM")
-        print("7. Chat with LLM")
+        print("3. Get Pangolin results")
+        print("4. Select tissue type")
+        print("5. Get GTEx results")
+        print("6. Get LLM analysis in natural language")
+        print("7. Input context for LLM")
+        print("8. Chat with LLM")
         print("0. Exit")
         print("-" * 60)
         
@@ -392,14 +512,16 @@ class ChatSAVPipeline:
                     case "2":
                         self.get_spliceai_results()
                     case "3":
-                        self.select_tissue_type()
+                        self.get_pangolin_results()
                     case "4":
-                        self.get_gtex_results()
+                        self.select_tissue_type()
                     case "5":
+                        self.get_gtex_results()
+                    case "6":
                         self.get_llm_results()
-                    case "6":
+                    case "7":
                         self.input_context()
-                    case "6":
+                    case "8":
                         self.chat_with_llm()
                     case "0":
                         print("\nThank you for using ChatSAV!")

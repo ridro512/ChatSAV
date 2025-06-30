@@ -8,7 +8,7 @@ Output: GTEx whole blood expression status
 import requests
 from typing import List, Dict, Any, Optional
 
-def call_gtex(gencode_ids, tissues):
+def call_gtex(gencode_id, tissues):
     """
     Query the GTEx API to check median transcript expression in a specific tissue.
 
@@ -22,33 +22,32 @@ def call_gtex(gencode_ids, tissues):
         splice junctions and exons
     """
     results_list = []
-    for gencode_id in gencode_ids:
-        for tissue in tissues:
-            url = "https://gtexportal.org/api/v2/expression/medianGeneExpression"
-            params = {
-                "gencodeId": [gencode_id],
-                "tissueSiteDetailId": [tissue],
-                "datasetId": "gtex_v8"
-            }
+    for tissue in tissues:
+        url = "https://gtexportal.org/api/v2/expression/medianGeneExpression"
+        params = {
+            "gencodeId": [gencode_id],
+            "tissueSiteDetailId": [tissue],
+            "datasetId": "gtex_v8"
+        }
 
-            try:
-                response = requests.get(url, params=params, timeout=200)
-                response.raise_for_status()
-                result = response.json()
-                data = result.get("data", [])
-                if not data:
-                    # print(f"No expression data found for {gencode_id} in {tissue}.")
-                    results_list.append(None)
-                    continue
-    
-                median_tpm = data[0].get("median")
-                # print(f"Median expression (TPM) of {gencode_id} in {tissue}: {median_tpm}")
-                results_list.append(median_tpm)
-    
-            except requests.exceptions.RequestException as e:
-                print(f"Request failed: {e}")
+        try:
+            response = requests.get(url, params=params, timeout=200)
+            response.raise_for_status()
+            result = response.json()
+            data = result.get("data", [])
+            if not data:
+                # print(f"No expression data found for {gencode_id} in {tissue}.")
                 results_list.append(None)
                 continue
+
+            median_tpm = data[0].get("median")
+            # print(f"Median expression (TPM) of {gencode_id} in {tissue}: {median_tpm}")
+            results_list.append(median_tpm)
+
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+            results_list.append(None)
+            continue
         return results_list
 
 # example call
