@@ -158,6 +158,13 @@ class ChatSAVPipeline:
                     print(f"  Donor Loss: {data['scores'].get('DS_DL')}")
                     print()
                     
+                    print("Reference vs Alternative Scores:")
+                    print(f"  Acceptor Gain - REF: {data['scores'].get('DS_AG_REF')} | ALT: {data['scores'].get('DS_AG_ALT')}")
+                    print(f"  Acceptor Loss - REF: {data['scores'].get('DS_AL_REF')} | ALT: {data['scores'].get('DS_AL_ALT')}")
+                    print(f"  Donor Gain - REF: {data['scores'].get('DS_DG_REF')} | ALT: {data['scores'].get('DS_DG_ALT')}")
+                    print(f"  Donor Loss - REF: {data['scores'].get('DS_DL_REF')} | ALT: {data['scores'].get('DS_DL_ALT')}")
+                    print()
+                    
                     print("Position Changes:")
                     print(f"  Acceptor Gain: {data['scores'].get('DP_AG')}")
                     print(f"  Acceptor Loss: {data['scores'].get('DP_AL')}")
