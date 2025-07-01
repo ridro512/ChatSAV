@@ -16,7 +16,8 @@ The proposed project is to build a software tool in which an LLM receives a quer
 Credits/Copyright: Dao M, Venkateswaran G, Rogers C, Zhao K
 
 # Installation
-The required packages are listed in requirements.txt. Program is ready to run straight away
+The required packages are OpenAI API, (pip install openai).
+Ensure the file chatSav.py is executable and run using ./chatSav.py
 # Usage
 Input: Coordinates of a variant (chr:pos:ref:alt format)
 

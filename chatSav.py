@@ -15,9 +15,16 @@ VARIANT FORMAT INFORMATION:
 from typing import Tuple, Dict, Any, Optional
 
 from callSplice import call_splice
-# from callGtex import call_gtex  # results of GTEx whole blood expression
-from callLlm import call_llm
 from callPangolin import call_pangolin
+from callGtex import (
+    medianGeneExpression, 
+    geneExpression, 
+    medianExonExpression, 
+    medianJunctionExpression,
+    topExpressedGenes,
+    call_gtex  # Keep for backward compatibility
+)
+from callLlm import call_llm
 from chatLLM import ChatLLM
 
 
@@ -29,7 +36,7 @@ class ChatSAVPipeline:
         self.hg: Optional[str] = None
         self.distance: int = 50
         self.mask: int = 0
-        self.tissue: Optional[str] = None
+        self.tissues: Optional[List[str]] = []
         self.spliceai_results: Optional[Dict[str, Any]] = None
         self.pangolin_results: Optional[Dict[str, Any]] = None
         self.gtex_results: Optional[Dict[str, Any]] = None
@@ -38,7 +45,7 @@ class ChatSAVPipeline:
         self.pos: Optional[int] = None
         self.ref: Optional[str] = None
         self.alt: Optional[str] = None
-
+        self.gtex_endpoint: str = "medianGeneExpression"
         self.chat_handler = ChatLLM(self)
 
     def wait_for_user(self) -> None:
@@ -95,7 +102,7 @@ class ChatSAVPipeline:
             
         while True:
             dist = input(
-                "(Optional) Please enter the distance parameter of SpliceAI model (default: 50)"
+                "(Optional) Please enter the distance parameter of SpliceAI model (default: 50)\n"
             ).strip()
 
             try:
@@ -109,17 +116,23 @@ class ChatSAVPipeline:
             
         while True:
             mask = input(
-                "(Optional) Please enter if you would like raw or masked scores. Can be 0 which means raw scores or 1 which means masked scores (default: 0). Splicing changes corresponding to strengthening annotated splice sites and weakening unannotated splice sites are typically much less pathogenic than weakening annotated splice sites and strengthening unannotated splice sites. When this parameter is = 1 (masked), the delta scores of such splicing changes are set to 0. SpliceAI developers recommend using raw (0) for alternative splicing analysis and masked (1) for variant interpretation.\n"
+                "(Optional) Please enter if you would like raw (0) or masked scores (1) (default: 0)\n"
             ).strip()
 
             try:
                 mask = int(mask)
-                self.mask = mask
-                print(f"✓ SpliceAI mask set: {mask}")
-                break
+                if mask in [0,1]:
+                    self.mask = mask
+                    print(f"✓ SpliceAI mask set: {mask}")
+                    break
+                else:
+                    print(f"{mask} is not a valid option, defaulting to raw scores 0\n")
+                    break
             except ValueError:
                 print(f"{mask} is not a valid option, defaulting to raw scores 0\n")
                 break
+
+        self.wait_for_user()
 
     def get_spliceai_results(self) -> None:
         """Get SpliceAI results for the current variant."""
@@ -314,62 +327,146 @@ class ChatSAVPipeline:
         """Select tissue type for GTEx analysis."""
         print("\n--- Tissue Type Selection ---")
         
-        print("Available tissue types (examples):")
-        print("- Whole_Blood")
-        print("- Brain_Cortex")
-        print("- Heart_Left_Ventricle")
-        print("- Liver")
-        print("- Lung")
-        print("- Muscle_Skeletal")
-        print("- Skin_Sun_Exposed_Lower_leg")
+        tissues_input = input("\nPlease enter the tissue types you wish to analyse, seperated by commas (e.g., Whole_Blood, Brain_Cortex)):\n").strip()
         
-        tissue = input("\nPlease enter the tissue type (e.g., Whole_Blood):\n").strip()
-        
-        if tissue:
-            self.tissue = tissue
-            print(f"✓ Tissue type set: {tissue}")
+        if tissues_input:
+            tissue_list = [tissue.strip() for tissue in tissues_input.split(',')]
+            self.tissues = tissue_list
+            print(f"✓ Tissue types set: {', '.join(tissue_list)}")
         else:
-            print("Error: Please enter a valid tissue type")
+            print("Error: Please enter at least one valid tissue type")
 
         self.wait_for_user()
+
+    def select_gtex_endpoint(self) -> None:
+        """Select which GTEx API endpoint to use."""
+        print("\n--- GTEx API Endpoint Selection ---")
+        print("\nAvailable GTEx endpoints:")
+        print("1. Median Gene Expression (default)")
+        print("2. Gene Expression (with sample data)")
+        print("3. Median Exon Expression")
+        print("4. Median Junction Expression")
+        print("5. Top Expressed Genes (by tissue)")
+        
+        choice = input("\nSelect endpoint (1-5, default=1): ").strip()
+        
+        endpoint_map = {
+            "1": "medianGeneExpression",
+            "2": "geneExpression",
+            "3": "medianExonExpression",
+            "4": "medianJunctionExpression",
+            "5": "topExpressedGenes"
+        }
+        
+        if choice in endpoint_map:
+            self.gtex_endpoint = endpoint_map[choice]
+            print(f"✓ GTEx endpoint set to: {self.gtex_endpoint}")
+        else:
+            print("Invalid choice, keeping default: medianGeneExpression")
+        
+        self.wait_for_user()
+
 
     def get_gtex_results(self) -> None:
         """Get GTEx expression results for the current variant and tissue."""
         print("\n--- Getting GTEx Results ---")
         
-        if not self.tissue:
-            print("Error: Please select tissue type first (Option 3)")
+        if not self.tissues:
+            print("Error: Please select tissue types first (Option 4)")
             return
         
         if not self.variant_coord:
             print("Error: Please input variant coordinates first (Option 1)")
             return
         
-        print(f"Analyzing expression in {self.tissue} for variant: {self.variant_coord}")
+        if self.gtex_endpoint != "topExpressedGenes" and not self.spliceai_results:
+            print("Error: Please get SpliceAI results first (Option 2) to identify the gene")
+            return
+        
+        print(f"Analyzing expression in {', '.join(self.tissues)} for variant: {self.variant_coord}")
+        print(f"Using GTEx endpoint: {self.gtex_endpoint}")
         
         try:
-            # TODO: Replace with actual GTEx call when implemented
-            # self.gtex_results = call_gtex(self.variant_coord, self.tissue)
+            self.gtex_results = {}
             
-            # Placeholder results for now
-            self.gtex_results = {
-                "tissue": self.tissue,
-                "tpm": 0.5,
-                "expressed": False,
-                "percentile": 25
-            }
-            
-            if 'error' in self.gtex_results:
-                print(f"Error calling GTEx: {self.gtex_results['error']}")
+            # Handle topExpressedGenes differently (tissue-based, not gene-based)
+            if self.gtex_endpoint == "topExpressedGenes":
+                for tissue in self.tissues:
+                    print(f"\nQuerying top expressed genes in {tissue}")
+                    result = topExpressedGenes(tissue)
+                    
+                    if 'error' not in result:
+                        self.gtex_results[tissue] = result
+                        print(f"✓ Found {len(result.get('top_genes', []))} top expressed genes")
+                        # Show top 5
+                        for i, gene in enumerate(result.get('top_genes', [])[:5]):
+                            print(f"  {i+1}. {gene['gene_symbol']} - {gene['median_expression']} TPM")
+                    else:
+                        print(f"Error: {result['error']}")
             else:
-                print("\n✓ GTEx Results:")
-                print("=" * 50)
-                for key, value in self.gtex_results.items():
-                    print(f"{key}: {value}")
+                # Extract GENCODE IDs from SpliceAI results
+                gencode_ids = set()
+                for transcript in self.spliceai_results.get('splice_scores', []):
+                    gene_id = transcript.get('ensembl_id')
+                    if gene_id:
+                        gencode_ids.add(gene_id)
                 
+                if not gencode_ids:
+                    print("Error: No GENCODE IDs found in SpliceAI results")
+                    return
+                
+                # Get GTEx results for each gene
+                for gencode_id in gencode_ids:
+                    print(f"\nQuerying GTEx for gene: {gencode_id}")
+                    
+                    # Call appropriate endpoint
+                    if self.gtex_endpoint == "medianGeneExpression":
+                        result = medianGeneExpression(gencode_id, self.tissues)
+                    elif self.gtex_endpoint == "geneExpression":
+                        result = geneExpression(gencode_id, self.tissues)
+                    elif self.gtex_endpoint == "medianExonExpression":
+                        result = medianExonExpression(gencode_id, self.tissues)
+                    elif self.gtex_endpoint == "medianJunctionExpression":
+                        result = medianJunctionExpression(gencode_id, self.tissues)
+                    
+                    if 'error' not in result:
+                        self.gtex_results[gencode_id] = result
+                        
+                        # Display results based on endpoint
+                        print(f"\n✓ GTEx Results for {gencode_id}:")
+                        print("=" * 50)
+                        
+                        if self.gtex_endpoint == "medianGeneExpression":
+                            for tissue, data in result.get('expression_data', {}).items():
+                                print(f"\nTissue: {tissue}")
+                                print(f"  Median TPM: {data.get('median_tpm', 'N/A')}")
+                                print(f"  Expressed: {data.get('expressed', 'N/A')}")
+                                print(f"  Expression Level: {data.get('expression_level', 'N/A')}")
+                        
+                        elif self.gtex_endpoint == "geneExpression":
+                            for tissue, data in result.get('expression_data', {}).items():
+                                print(f"\nTissue: {tissue}")
+                                print(f"  Sample count: {len(data.get('data', []))}")
+                                print(f"  Gene symbol: {data.get('gene_symbol', 'N/A')}")
+                        
+                        elif self.gtex_endpoint == "medianExonExpression":
+                            for tissue, data in result.get('exon_data', {}).items():
+                                print(f"\nTissue: {tissue}")
+                                print(f"  Exon count: {data.get('exon_count', 0)}")
+                                # Show first few exons
+                                for exon in data.get('exons', [])[:3]:
+                                    print(f"  - {exon['exon_id']}: {exon['median_expression']}")
+                        
+                        elif self.gtex_endpoint == "medianJunctionExpression":
+                            for tissue, data in result.get('junction_data', {}).items():
+                                print(f"\nTissue: {tissue}")
+                                print(f"  Junction count: {data.get('junction_count', 0)}")
+                    else:
+                        print(f"Error getting GTEx data: {result['error']}")
+            
         except Exception as e:
             print(f"Error: Failed to get GTEx results: {e}")
-
+        
         self.wait_for_user()
 
     def input_context(self) -> None:
@@ -451,8 +548,8 @@ class ChatSAVPipeline:
         status = []
         if self.variant_coord:
             status.append(f"✓ Variant: {self.variant_coord} (GRCh{self.hg})")
-        if self.tissue:
-            status.append(f"✓ Tissue: {self.tissue}")
+        if self.tissues:
+            status.append(f"✓ Tissues: {', '.join(self.tissues)}")
         if self.spliceai_results:
             status.append("✓ SpliceAI results available")
         if self.pangolin_results:
@@ -469,11 +566,12 @@ class ChatSAVPipeline:
         print("1. Input variant coordinates")
         print("2. Get SpliceAI results")
         print("3. Get Pangolin results")
-        print("4. Select tissue type")
-        print("5. Get GTEx results")
-        print("6. Get LLM analysis in natural language")
-        print("7. Input context for LLM")
-        print("8. Chat with LLM")
+        print("4. Select tissue types")
+        print("5. Select GTEx endpoint")
+        print("6. Get GTEx results")
+        print("7. Get LLM analysis in natural language")
+        print("8. Input context for LLM")
+        print("9. Chat with LLM")
         print("0. Exit")
         print("-" * 60)
         
@@ -495,12 +593,14 @@ class ChatSAVPipeline:
                     case "4":
                         self.select_tissue_type()
                     case "5":
-                        self.get_gtex_results()
+                        self.select_gtex_endpoint()
                     case "6":
-                        self.get_llm_results()
+                        self.get_gtex_results()
                     case "7":
-                        self.input_context()
+                        self.get_llm_results()
                     case "8":
+                        self.input_context()
+                    case "9":
                         self.chat_with_llm()
                     case "0":
                         print("\nThank you for using ChatSAV!")
