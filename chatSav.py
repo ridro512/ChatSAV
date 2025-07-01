@@ -18,6 +18,7 @@ from callSplice import call_splice
 # from callGtex import call_gtex  # results of GTEx whole blood expression
 from callLlm import call_llm
 from callPangolin import call_pangolin
+from chatLLM import ChatLLM
 
 
 class ChatSAVPipeline:
@@ -37,6 +38,8 @@ class ChatSAVPipeline:
         self.pos: Optional[int] = None
         self.ref: Optional[str] = None
         self.alt: Optional[str] = None
+
+        self.chat_handler = ChatLLM(self)
 
     def wait_for_user(self) -> None:
         """Wait for user to press a key before continuing."""
@@ -414,31 +417,7 @@ class ChatSAVPipeline:
 
     def chat_with_llm(self) -> None:
         """Interactive chat with LLM about the variant."""
-        print("\n--- Chat with LLM ---")
-        
-        if not self.variant_coord:
-            print("Error: Please input variant coordinates first (Option 1)")
-            return
-        
-        print(f"Chatting about variant: {self.variant_coord}")
-        print("Type 'exit' to return to main menu")
-        
-        while True:
-            user_input = input("\nYour question: ").strip()
-            
-            if user_input.lower() in ['exit', 'quit', 'back']:
-                break
-            
-            if not user_input:
-                continue
-            
-            try:
-                # TODO: Implement chat functionality with LLM
-                # For now, provide a placeholder response
-                print("LLM: This is a placeholder response. Chat functionality will be implemented with the full LLM integration.")
-                
-            except Exception as e:
-                print(f"Error: {e}")
+        self.chat_handler.start_chat()
 
     def print_results(self, llm_results: Dict[str, Any]) -> None:
         """
