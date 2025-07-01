@@ -1,55 +1,328 @@
 #!/usr/bin/env python3
 """
-callGtex.py - File for calling GTEx whole blood expression data
+callGtex.py - File for calling GTEx expression data with correct API endpoints
 
-Input:
-Output: GTEx whole blood expression status
+Input: GENCODE ID and list of tissues
+Output: GTEx expression data from various endpoints
 """
 import requests
 from typing import List, Dict, Any, Optional
 
-def call_gtex(gencode_id, tissues):
+def medianGeneExpression(gencode_id: str, tissues: List[str]) -> Dict[str, Any]:
     """
-    Query the GTEx API to check median transcript expression in a specific tissue.
+    Query the GTEx API for median gene expression across tissues.
+    Uses: /api/v2/expression/medianGeneExpression
 
     Args:
-        gencode_id (list[str]): Versioned GENCODE IDs (e.g. 'ENSG00000123456.15').
-        tissue (list[str]): GTEx tissue site IDs (e.g. 'Whole_Blood').
-        dataset_id (str): Dataset ID (default is 'gtex_v8').
+        gencode_id (str): Versioned GENCODE ID (e.g. 'ENSG00000123456.15').
+        tissues (List[str]): GTEx tissue site IDs (e.g. ['Whole_Blood', 'Brain_Cortex']).
 
     Returns:
-        float or None: Median TPM value if found, otherwise None.
-        splice junctions and exons
+        Dict containing median TPM values by tissue
     """
-    results_list = []
-    for tissue in tissues:
-        url = "https://gtexportal.org/api/v2/expression/medianGeneExpression"
-        params = {
-            "gencodeId": [gencode_id],
-            "tissueSiteDetailId": [tissue],
-            "datasetId": "gtex_v8"
-        }
+    results = {
+        "gene_id": gencode_id,
+        "tissues": tissues,
+        "expression_data": {},
+        "api_endpoint": "medianGeneExpression"
+    }
+    
+    url = "https://gtexportal.org/api/v2/expression/medianGeneExpression"
+    
+    # GTEx API accepts arrays in the gencodeId parameter
+    params = {
+        "gencodeId": [gencode_id],
+        "tissueSiteDetailId": tissues,
+        "datasetId": "gtex_v10"
+    }
 
-        try:
-            response = requests.get(url, params=params, timeout=200)
-            response.raise_for_status()
-            result = response.json()
-            data = result.get("data", [])
-            if not data:
-                # print(f"No expression data found for {gencode_id} in {tissue}.")
-                results_list.append(None)
-                continue
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        
+        # Parse paginated response
+        data = result.get("data", [])
+        
+        for item in data:
+            tissue = item.get("tissueSiteDetailId")
+            median_tpm = item.get("median")
+            
+            results["expression_data"][tissue] = {
+                "median_tpm": median_tpm,
+                "expressed": median_tpm > 1.0 if median_tpm else False,
+                "expression_level": categorize_expression(median_tpm),
+                "gencode_id": item.get("gencodeId"),
+                "gene_symbol": item.get("geneSymbol"),
+                "unit": item.get("unit")
+            }
 
-            median_tpm = data[0].get("median")
-            # print(f"Median expression (TPM) of {gencode_id} in {tissue}: {median_tpm}")
-            results_list.append(median_tpm)
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed for medianGeneExpression {gencode_id}: {e}")
+        results["error"] = str(e)
+    
+    return results
 
-        except requests.exceptions.RequestException as e:
-            print(f"Request failed: {e}")
-            results_list.append(None)
-            continue
-        return results_list
+def geneExpression(gencode_id: str, tissues: List[str] = None) -> Dict[str, Any]:
+    """
+    Query the GTEx API for gene expression across tissues.
+    Uses: /api/v2/expression/geneExpression
 
-# example call
-# if __name__ == "__main__":
-#     call_gtex(["ENSG00000141510.16"], "Whole_Blood")
+    Args:
+        gencode_id (str): Versioned GENCODE ID (e.g. 'ENSG00000123456.15').
+        tissues (List[str], optional): Specific tissues to query.
+
+    Returns:
+        Dict containing expression data across tissues
+    """
+    results = {
+        "gene_id": gencode_id,
+        "expression_data": {},
+        "api_endpoint": "geneExpression"
+    }
+    
+    url = "https://gtexportal.org/api/v2/expression/geneExpression"
+    params = {
+        "gencodeId": [gencode_id],
+        "datasetId": "gtex_v10"
+    }
+    
+    # Add tissue filter if specified
+    if tissues:
+        params["tissueSiteDetailId"] = tissues
+
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        data = result.get("data", [])
+        
+        for tissue_data in data:
+            tissue = tissue_data.get("tissueSiteDetailId")
+            
+            results["expression_data"][tissue] = {
+                "gencode_id": tissue_data.get("gencodeId"),
+                "gene_symbol": tissue_data.get("geneSymbol"),
+                "unit": tissue_data.get("unit"),
+                "data": tissue_data.get("data", []),  # Individual sample data
+                "ontology_id": tissue_data.get("ontologyId"),
+                "subset_group": tissue_data.get("subsetGroup")
+            }
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed for geneExpression {gencode_id}: {e}")
+        results["error"] = str(e)
+    
+    return results
+
+def medianExonExpression(gencode_id: str, tissues: List[str]) -> Dict[str, Any]:
+    """
+    Query the GTEx API for median exon expression data.
+    Uses: /api/v2/expression/medianExonExpression
+
+    Args:
+        gencode_id (str): Versioned GENCODE ID
+        tissues (List[str]): GTEx tissue site IDs
+
+    Returns:
+        Dict containing exon expression data
+    """
+    results = {
+        "gene_id": gencode_id,
+        "tissues": tissues,
+        "exon_data": {},
+        "api_endpoint": "medianExonExpression"
+    }
+    
+    url = "https://gtexportal.org/api/v2/expression/medianExonExpression"
+    params = {
+        "gencodeId": [gencode_id],
+        "tissueSiteDetailId": tissues,
+        "datasetId": "gtex_v10"
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        data = result.get("data", [])
+        
+        # Group by tissue
+        for item in data:
+            tissue = item.get("tissueSiteDetailId")
+            if tissue not in results["exon_data"]:
+                results["exon_data"][tissue] = {"exons": [], "exon_count": 0}
+            
+            exon_info = {
+                "exon_id": item.get("exonId"),
+                "median_expression": item.get("median"),
+                "gencode_id": item.get("gencodeId"),
+                "gene_symbol": item.get("geneSymbol"),
+                "unit": item.get("unit")
+            }
+            results["exon_data"][tissue]["exons"].append(exon_info)
+        
+        # Count exons per tissue
+        for tissue in results["exon_data"]:
+            results["exon_data"][tissue]["exon_count"] = len(results["exon_data"][tissue]["exons"])
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed for medianExonExpression {gencode_id}: {e}")
+        results["error"] = str(e)
+    
+    return results
+
+def medianJunctionExpression(gencode_id: str, tissues: List[str]) -> Dict[str, Any]:
+    """
+    Query the GTEx API for median junction expression data.
+    Uses: /api/v2/expression/medianJunctionExpression
+
+    Args:
+        gencode_id (str): Versioned GENCODE ID
+        tissues (List[str]): GTEx tissue site IDs
+
+    Returns:
+        Dict containing junction expression data
+    """
+    results = {
+        "gene_id": gencode_id,
+        "tissues": tissues,
+        "junction_data": {},
+        "api_endpoint": "medianJunctionExpression"
+    }
+    
+    url = "https://gtexportal.org/api/v2/expression/medianJunctionExpression"
+    params = {
+        "gencodeId": [gencode_id],
+        "tissueSiteDetailId": tissues,
+        "datasetId": "gtex_v10"
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        data = result.get("data", [])
+        
+        # Group by tissue
+        for item in data:
+            tissue = item.get("tissueSiteDetailId")
+            if tissue not in results["junction_data"]:
+                results["junction_data"][tissue] = {"junctions": [], "junction_count": 0}
+            
+            junction_info = {
+                "junction_id": item.get("junctionId"),
+                "median_reads": item.get("median"),
+                "gencode_id": item.get("gencodeId"),
+                "gene_symbol": item.get("geneSymbol"),
+                "unit": item.get("unit")
+            }
+            results["junction_data"][tissue]["junctions"].append(junction_info)
+        
+        # Count junctions per tissue
+        for tissue in results["junction_data"]:
+            results["junction_data"][tissue]["junction_count"] = len(results["junction_data"][tissue]["junctions"])
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed for medianJunctionExpression {gencode_id}: {e}")
+        results["error"] = str(e)
+    
+    return results
+
+def topExpressedGenes(tissue: str, filter_mt_gene: bool = True) -> Dict[str, Any]:
+    """
+    Query the GTEx API for top expressed genes in a tissue.
+    Uses: /api/v2/expression/topExpressedGene
+
+    Args:
+        tissue (str): GTEx tissue site ID
+        filter_mt_gene (bool): Exclude mitochondrial genes
+
+    Returns:
+        Dict containing top expressed genes data
+    """
+    results = {
+        "tissue": tissue,
+        "top_genes": [],
+        "api_endpoint": "topExpressedGene"
+    }
+    
+    url = "https://gtexportal.org/api/v2/expression/topExpressedGene"
+    params = {
+        "tissueSiteDetailId": tissue,
+        "filterMtGene": filter_mt_gene,
+        "datasetId": "gtex_v10",
+        "itemsPerPage": 100  # Get top 100 genes
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        data = result.get("data", [])
+        
+        for item in data:
+            gene_info = {
+                "gencode_id": item.get("gencodeId"),
+                "gene_symbol": item.get("geneSymbol"),
+                "median_expression": item.get("median"),
+                "unit": item.get("unit"),
+                "tissue": item.get("tissueSiteDetailId"),
+                "ontology_id": item.get("ontologyId")
+            }
+            results["top_genes"].append(gene_info)
+
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed for topExpressedGenes {tissue}: {e}")
+        results["error"] = str(e)
+    
+    return results
+
+def categorize_expression(tpm_value: float) -> str:
+    """Categorize expression level based on TPM value."""
+    if tpm_value is None:
+        return "no_data"
+    elif tpm_value >= 10:
+        return "high"
+    elif tpm_value >= 1:
+        return "moderate"
+    elif tpm_value >= 0.1:
+        return "low"
+    else:
+        return "very_low"
+
+# Wrapper function for backward compatibility
+def call_gtex(gencode_id: str, tissues: List[str]) -> Dict[str, Any]:
+    """
+    Main function for GTEx analysis - calls medianGeneExpression by default.
+    
+    Args:
+        gencode_id (str): Versioned GENCODE ID
+        tissues (List[str]): List of tissue types
+    
+    Returns:
+        Dict containing expression results
+    """
+    return medianGeneExpression(gencode_id, tissues)
+
+# Example usage
+if __name__ == "__main__":
+    # Test with the actual API endpoints
+    test_gene = "ENSG00000167632.18"
+    test_tissues = ["Whole_Blood", "Brain_Cortex"]
+    
+    print("Testing medianGeneExpression:")
+    median_results = medianGeneExpression(test_gene, test_tissues)
+    print(f"Results: {median_results}")
+    
+    print("\nTesting medianExonExpression:")
+    exon_results = medianExonExpression(test_gene, test_tissues)
+    print(f"Results: {exon_results}")
+    
+    print("\nTesting medianJunctionExpression:")
+    junction_results = medianJunctionExpression(test_gene, test_tissues)
+    print(f"Results: {junction_results}")
+    
+    print("\nTesting topExpressedGenes:")
+    top_genes = topExpressedGenes("Whole_Blood")
+    print(f"Top genes count: {len(top_genes.get('top_genes', []))}")
