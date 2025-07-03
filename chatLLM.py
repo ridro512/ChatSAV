@@ -10,6 +10,7 @@ Handles all chat-related interactions with the LLM, including:
 """
 
 from typing import List, Dict, Any, Optional
+from callLlm import call_llm
 
 class ChatLLM:
     def __init__(self, pipeline_instance):
@@ -17,6 +18,7 @@ class ChatLLM:
         self.conversation_history: List[Dict[str, str]] = []
         self.max_history_length = 5
         self.max_response_tokens = 300
+        self.llm_analysis_results = None
     
     def start_chat(self) -> None:
         # start interactive chat session
@@ -26,6 +28,20 @@ class ChatLLM:
             print("Error: Please input variant coordinates first (Option 1)")
             self.pipeline.wait_for_user()
             return
+
+        if not self.pipeline.spliceai_results:
+            print("Warning: No SpliceAI results available. Please run SpliceAI analysis first (Option 2) for better chat experience.")
+        
+        if not self.pipeline.gtex_results:
+            print("Warning: No GTEx results available. Please run GTEx analysis first (Option 6) for better chat experience.")
+        
+        # generate LLM analysis if we have the required data
+        if hasattr(self.pipeline, 'last_llm_results') and self.pipeline.last_llm_results:
+            print("Using existing LLM analysis results for chat context...")
+            self.llm_analysis_results = self.pipeline.last_llm_results
+        elif self.pipeline.spliceai_results and self.pipeline.gtex_results:
+            print("Generating comprehensive analysis for chat context...")
+            self.generate_llm_analysis_for_chat()
         
         print(f"Starting interactive chat about variant: {self.pipeline.variant_coord}")
         print("=" * 60)
@@ -51,6 +67,7 @@ class ChatLLM:
     
     # show what analysis data is available for discussion
     def show_available_data(self) -> None:
+        """Show what analysis data is available for discussion."""
         available_data = []
         if self.pipeline.spliceai_results:
             available_data.append("SpliceAI predictions")
@@ -60,17 +77,38 @@ class ChatLLM:
             available_data.append("GTEx expression data")
         if self.pipeline.context:
             available_data.append("User context")
+        if self.llm_analysis_results:
+            available_data.append("LLM analysis results")
         
         if available_data:
             print(f"Available data for discussion: {', '.join(available_data)}")
         else:
-            print("Note: No analysis data available yet. You can still ask general questions about the variant.")
+            print("Note: Limited analysis data available. Consider running SpliceAI and GTEx analyses first.")
+    
+    def generate_llm_analysis_for_chat(self) -> None:
+        """Generate LLM analysis results to use as context for chat."""
+        try:
+            self.llm_analysis_results = call_llm(
+                self.pipeline.spliceai_results, 
+                self.pipeline.gtex_results, 
+                self.pipeline.chrom, 
+                self.pipeline.pos, 
+                self.pipeline.ref, 
+                self.pipeline.alt, 
+                self.pipeline.context,
+                model="gpt-4.1-nano"
+            )
+            print("✓ Analysis generated for chat context")
+        except Exception as e:
+            print(f"Warning: Could not generate analysis for chat context: {e}")
+            self.llm_analysis_results = None
     
     def show_chat_instructions(self) -> None:
         print("\nChat Commands:")
         print("- Type your question and press Enter")
         print("- Type 'exit', 'quit', or 'back' to return to main menu")
         print("- Type 'summary' to get a quick overview of current findings")
+        print("- Type 'analysis' to see the full LLM analysis")
         print("- Type 'help' to see example questions")
         print("- Type 'clear' to clear conversation history")
         print("-" * 60)
@@ -84,12 +122,29 @@ class ChatLLM:
         elif command == 'summary':
             self.show_quick_summary()
             return True
+        elif command == 'analysis':
+            self.show_full_analysis()
+            return True
         elif command == 'clear':
             self.conversation_history.clear()
             print("Conversation history cleared.")
             return True
         
         return False
+    
+    def show_full_analysis(self) -> None:
+        """Show the full LLM analysis if available."""
+        if self.llm_analysis_results:
+            print("\n--- Full LLM Analysis ---")
+            print("=" * 50)
+            print(f"Priority: {self.llm_analysis_results.get('priority_level', 'N/A')}")
+            print(f"Pathogenicity: {self.llm_analysis_results.get('pathogenicity_assessment', 'N/A')}")
+            print(f"Recommendations: {self.llm_analysis_results.get('experimental_recommendations', 'N/A')}")
+            print("\nDetailed Analysis:")
+            print("-" * 30)
+            print(self.llm_analysis_results.get('llm_interpretation', 'No analysis available'))
+        else:
+            print("No LLM analysis available. Please run the full analysis first (Option 7) or ensure SpliceAI and GTEx data are available.")
     
     def process_chat_question(self, user_input: str) -> None:
         """Process a regular chat question."""
@@ -134,6 +189,13 @@ class ChatLLM:
             print("• Would expression testing be informative?")
             print("• What tissues should I test?")
         
+        if self.llm_analysis_results:
+            print("\nAnalysis-based questions:")
+            print("• Why did you assign this priority level?")
+            print("• Can you elaborate on the pathogenicity assessment?")
+            print("• What makes you recommend these experiments?")
+            print("• What additional evidence would change your assessment?")
+        
         print("\nClinical questions:")
         print("• What experiments should I prioritize?")
         print("• How would you classify this variant's pathogenicity?")
@@ -157,6 +219,10 @@ class ChatLLM:
             expressed = "Yes" if self.pipeline.gtex_results.get('expressed') else "No"
             tpm = self.pipeline.gtex_results.get('tpm', 'N/A')
             print(f"GTEx: Expressed in {self.pipeline.gtex_results.get('tissue')}: {expressed} (TPM: {tpm})")
+        
+        if self.llm_analysis_results:
+            print(f"LLM Assessment: {self.llm_analysis_results.get('pathogenicity_assessment', 'N/A')}")
+            print(f"Priority: {self.llm_analysis_results.get('priority_level', 'N/A')}")
         
         if self.pipeline.context:
             context_preview = self.pipeline.context[:100] + ('...' if len(self.pipeline.context) > 100 else '')
@@ -213,6 +279,14 @@ class ChatLLM:
         context_parts.append(f"- Chromosome: {self.pipeline.chrom}, Position: {self.pipeline.pos}")
         context_parts.append(f"- Change: {self.pipeline.ref} → {self.pipeline.alt}")
         context_parts.append(f"- Genome build: GRCh{self.pipeline.hg}")
+
+        # add LLM analysis results if available (priority)
+        if self.llm_analysis_results:
+            context_parts.append("\nPREVIOUS LLM ANALYSIS:")
+            context_parts.append(f"- Priority Level: {self.llm_analysis_results.get('priority_level')}")
+            context_parts.append(f"- Pathogenicity Assessment: {self.llm_analysis_results.get('pathogenicity_assessment')}")
+            context_parts.append(f"- Experimental Recommendations: {self.llm_analysis_results.get('experimental_recommendations')}")
+            context_parts.append(f"- Full Analysis: {self.llm_analysis_results.get('llm_interpretation', '')[:500]}...")
         
         # add SpliceAI results if available
         if self.pipeline.spliceai_results:
@@ -273,21 +347,28 @@ class ChatLLM:
         try:
             system_prompt = """You are an expert genetic analyst having a conversation about a specific genetic variant.
 
+You have access to comprehensive analysis results from a previous detailed assessment. Use this information to provide informed, consistent responses.
+
+CRITICAL: Maintain strict consistency with the previous analysis, especially:
+- Use the EXACT same priority level from the previous analysis
+- Use the EXACT same pathogenicity assessment from the previous analysis  
+- When discussing experimental recommendations, focus on the MOST IMPORTANT recommendation from the previous analysis, not additional ones
+- Do not suggest new experiments beyond what was already recommended in the formal analysis
+
 Provide conversational, helpful responses that:
+- Reference and build upon the previous LLM analysis when relevant
 - Answer the user's specific question clearly and accurately
-- Reference the available analysis data when relevant
-- Suggest follow-up experiments or analyses when appropriate
+- Explain your reasoning based on the available data
+- Maintain strict consistency with previous assessments 
 - Explain complex genetic concepts in accessible terms
 - Maintain a helpful, professional tone
-- Be specific about scores, genes, and predictions when discussing them
-
-Keep responses concise but informative (2-4 sentences typically).
-If asked about something not covered in the available data, explain what additional information would be needed.
 
 For splice prediction scores:
 - Scores >0.5 are considered significant
 - DS_AG = Acceptor Gain, DS_AL = Acceptor Loss, DS_DG = Donor Gain, DS_DL = Donor Loss
-- Higher scores indicate higher confidence in the prediction"""
+- Higher scores indicate higher confidence in the prediction
+
+When referencing previous analysis, be specific about what led to those conclusions and maintain the same conclusions."""
             
             full_prompt = f"""{context}
 
@@ -321,8 +402,8 @@ Please provide a helpful response based on the available information about this 
         if len(self.conversation_history) > self.max_history_length:
             self.conversation_history = self.conversation_history[-self.max_history_length:]
     
+    # get summary of current convo for external use
     def get_conversation_summary(self) -> str:
-        """Get a summary of the current conversation for external use."""
         if not self.conversation_history:
             return "No conversation history available."
         
