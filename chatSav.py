@@ -12,7 +12,7 @@ VARIANT FORMAT INFORMATION:
 - Alternate allele: alt
 """
 
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional, List
 
 from callSplice import call_splice
 from callPangolin import call_pangolin
@@ -46,6 +46,7 @@ class ChatSAVPipeline:
         self.ref: Optional[str] = None
         self.alt: Optional[str] = None
         self.gtex_endpoint: str = "medianGeneExpression"
+        self.last_llm_results: Optional[Dict[str, Any]] = None
         self.chat_handler = ChatLLM(self)
 
     def wait_for_user(self) -> None:
@@ -490,7 +491,7 @@ class ChatSAVPipeline:
             return
         
         if not self.gtex_results:
-            print("Error: Please get GTEx results first (Option 4)")
+            print("Error: Please get GTEx results first (Option 6)")
             return
         
         try:
@@ -504,7 +505,7 @@ class ChatSAVPipeline:
                 self.context,
                 model="gpt-4.1-nano"
             )
-            
+            self.last_llm_results = llm_results
             self.print_results(llm_results)
             
         except Exception as e:

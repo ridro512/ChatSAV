@@ -74,9 +74,10 @@ Please analyze the following genetic variant and provide a focused, concise eval
 CONSTRAINTS:
 - Provide ONLY the most relevant and accurate analysis
 - Focus on the transcript with the highest splice disruption scores
-- Give ONE clear recommendation per section, not multiple options, only give more if really needed
+- Give ONE clear recommendation per section, not multiple options
 - Be specific and actionable in your recommendations
 - Limit responses to essential information only
+- For experimental recommendations, suggest only the SINGLE most important/relevant test
 
 VARIANT INFORMATION:
 - Chromosome: {chrom}
@@ -112,13 +113,14 @@ Provide a structured analysis with the following sections. Each section should c
 
 4. EXPERIMENTAL PRIORITY:
    - Assign priority level: High/Medium/Low
-   - Recommend the single most appropriate testing method
+   - Recommend the SINGLE most appropriate and important testing method
    - Specify optimal tissue/cell type for testing
 
 5. SUMMARY RECOMMENDATION:
    - One clear action item for the curator
    - Key consideration for experimental validation
 
+For experimental recommendations, choose only the most critical test - do not list multiple options.
 Keep each section to 2-3 sentences maximum. Focus on actionable insights rather than general explanations."""
 
     return prompt
@@ -223,20 +225,21 @@ def extract_pathogenicity_assessment(analysis_text: str) -> str:
 
 # identifies which in vitro testing methods openai recommends
 def extract_experimental_recommendations(analysis_text: str) -> str:
+    """Identify the most important experimental recommendation from the LLM response."""
     text_lower = analysis_text.lower()
-    recommendations = []
     
-    if "minigene" in text_lower:
-        recommendations.append("minigene_assay")
-    if "rt-pcr" in text_lower or "rt pcr" in text_lower:
-        recommendations.append("rt_pcr")
-    if "rna-seq" in text_lower or "rna seq" in text_lower:
-        recommendations.append("rna_seq")
-    if "whole blood" in text_lower:
-        recommendations.append("whole_blood_testing")
-    if "patient sample" in text_lower or "patient tissue" in text_lower:
-        recommendations.append("patient_sample_testing")
-    if "functional assay" in text_lower:
-        recommendations.append("functional_assay")
+    recommendation_priority = [
+        ("minigene_assay", ["minigene"]),
+        ("rt_pcr", ["rt-pcr", "rt pcr"]),
+        ("rna_seq", ["rna-seq", "rna seq", "transcriptome"]),
+        ("patient_sample_testing", ["patient sample", "patient tissue"]),
+        ("functional_assay", ["functional assay", "functional testing"]),
+        ("whole_blood_testing", ["whole blood"]),
+    ]
     
-    return ",".join(recommendations) if recommendations else "manual_review_required"
+    for rec_code, keywords in recommendation_priority:
+        for keyword in keywords:
+            if keyword in text_lower:
+                return rec_code
+    
+    return "manual_review_required"
