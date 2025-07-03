@@ -31,13 +31,36 @@ from chatLLM import ChatLLM
 
 class ChatSAVPipeline:
     """Main pipeline class for ChatSAV analysis."""
+
+    VALID_TISSUES = {
+        "Adipose_Subcutaneous", "Adipose_Visceral_Omentum", "Adrenal_Gland", 
+        "Artery_Aorta", "Artery_Coronary", "Artery_Tibial", "Bladder", 
+        "Brain_Amygdala", "Brain_Anterior_cingulate_cortex_BA24", 
+        "Brain_Caudate_basal_ganglia", "Brain_Cerebellar_Hemisphere", 
+        "Brain_Cerebellum", "Brain_Cortex", "Brain_Frontal_Cortex_BA9", 
+        "Brain_Hippocampus", "Brain_Hypothalamus", 
+        "Brain_Nucleus_accumbens_basal_ganglia", "Brain_Putamen_basal_ganglia", 
+        "Brain_Spinal_cord_cervical_c-1", "Brain_Substantia_nigra", 
+        "Breast_Mammary_Tissue", "Cells_Cultured_fibroblasts", 
+        "Cells_EBV-transformed_lymphocytes", "Cells_Transformed_fibroblasts", 
+        "Cervix_Ectocervix", "Cervix_Endocervix", "Colon_Sigmoid", 
+        "Colon_Transverse", "Esophagus_Gastroesophageal_Junction", 
+        "Esophagus_Mucosa", "Esophagus_Muscularis", "Fallopian_Tube", 
+        "Heart_Atrial_Appendage", "Heart_Left_Ventricle", "Kidney_Cortex", 
+        "Kidney_Medulla", "Liver", "Lung", "Minor_Salivary_Gland", 
+        "Muscle_Skeletal", "Nerve_Tibial", "Ovary", "Pancreas", "Pituitary", 
+        "Prostate", "Skin_Not_Sun_Exposed_Suprapubic", 
+        "Skin_Sun_Exposed_Lower_leg", "Small_Intestine_Terminal_Ileum", 
+        "Spleen", "Stomach", "Testis", "Thyroid", "Uterus", "Vagina", 
+        "Whole_Blood"
+    }
     
     def __init__(self):
         self.variant_coord: Optional[str] = None
         self.hg: Optional[str] = None
         self.distance: int = 50
         self.mask: int = 0
-        self.tissues: Optional[List[str]] = ["Whole_Blood"]
+        self.tissues: Optional[List[str]] = []
         self.spliceai_results: Optional[Dict[str, Any]] = None
         self.pangolin_results: Optional[Dict[str, Any]] = None
         self.gtex_results: Optional[Dict[str, Any]] = None
@@ -291,14 +314,49 @@ class ChatSAVPipeline:
         """Select tissue type for GTEx analysis."""
         print("\n--- Tissue Type Selection ---")
         
-        tissues_input = input("\nPlease enter the tissue types you wish to analyse, seperated by commas (e.g., Whole_Blood, Brain_Cortex). Default: Whole_Blood):\n").strip()
+        print("\nAvailable tissue types (examples):")
+        print("Whole_Blood, Brain_Cortex, Heart_Left_Ventricle, Liver, Lung, Muscle_Skeletal...")
+        print("(See GTEx documentation for full list of valid tissue IDs)")
         
-        if tissues_input:
-            tissue_list = [tissue.strip() for tissue in tissues_input.split(',')]
-            self.tissues = tissue_list
-            print(f"✓ Tissue types set: {', '.join(tissue_list)}")
+        tissues_input = input(
+            "\nPlease enter the tissue types you wish to analyse, separated by commas.\n"
+            "Press Enter without typing to default to Whole_Blood:\n"
+        ).strip()
+        
+        if not tissues_input:
+            # User pressed enter without input - set default
+            self.tissues = ["Whole_Blood"]
+            print("✓ Defaulting to Whole_Blood")
         else:
-            print("Error: Please enter at least one valid tissue type")
+            # Parse and validate tissue types
+            tissue_list = [tissue.strip() for tissue in tissues_input.split(',')]
+            
+            # Validate tissues
+            invalid_tissues = []
+            valid_tissues = []
+            
+            for tissue in tissue_list:
+                if tissue in self.VALID_TISSUES:
+                    valid_tissues.append(tissue)
+                else:
+                    invalid_tissues.append(tissue)
+            
+            if invalid_tissues:
+                print(f"\n⚠️  Warning: The following tissue IDs are not valid GTEx tissue types:")
+                for tissue in invalid_tissues:
+                    print(f"   - {tissue}")
+                print("\nValid tissue IDs include:")
+                # Show a sample of valid tissues
+                sample_tissues = sorted(list(self.VALID_TISSUES))[:10]
+                for tissue in sample_tissues:
+                    print(f"   - {tissue}")
+                print("   ... and more (see GTEx documentation)")
+            
+            if valid_tissues:
+                self.tissues = valid_tissues
+                print(f"\n✓ Tissue types set: {', '.join(valid_tissues)}")
+            else:
+                print("\nError: No valid tissue types provided. Please try again.")
 
         self.wait_for_user()
 

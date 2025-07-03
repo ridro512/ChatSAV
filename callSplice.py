@@ -3,7 +3,7 @@ from typing import Tuple, Dict, Any, Optional
 
 #Potential Errors: User inputs a build that doesnt have a corresponding ts
 def call_splice(variant, hg, distance, mask):
-    url = f"https://spliceai-38-xwkwwwxdwq-uc.a.run.app/spliceai/?hg={hg}&variant={variant}&distance={distance}&mask={mask}"
+    url = f"https://spliceai-{hg}-xwkwwwxdwq-uc.a.run.app/spliceai/?hg={hg}&variant={variant}&distance={distance}&mask={mask}"
 
     response = requests.get(url)
 
