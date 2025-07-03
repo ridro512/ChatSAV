@@ -172,6 +172,61 @@ def medianExonExpression(gencode_id: str, tissues: List[str]) -> Dict[str, Any]:
     
     return results
 
+def getExons(gencode_id: str) -> Dict[str, Any]:
+    """
+    Query the GTEx API for exon information for a gene.
+    Uses: /api/v2/dataset/exon
+    
+    Args:
+        gencode_id (str): Versioned GENCODE ID
+        
+    Returns:
+        Dict containing exon structure information
+    """
+    results = {
+        "gene_id": gencode_id,
+        "exons": [],
+        "api_endpoint": "exon"
+    }
+    
+    url = "https://gtexportal.org/api/v2/dataset/exon"
+    params = {
+        "gencodeId": gencode_id,
+        "datasetId": "gtex_v10"
+    }
+    
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        data = result.get("data", [])
+        
+        for exon in data:
+            exon_info = {
+                "exon_id": exon.get("exonId"),
+                "exon_number": exon.get("exonNumber"),
+                "chromosome": exon.get("chromosome"),
+                "start": exon.get("start"),
+                "end": exon.get("end"),
+                "strand": exon.get("strand"),
+                "gencode_id": exon.get("gencodeId"),
+                "transcript_id": exon.get("transcriptId"),
+                "gene_symbol": exon.get("geneSymbol"),
+                "length": exon.get("end", 0) - exon.get("start", 0) if exon.get("end") and exon.get("start") else None
+            }
+            results["exons"].append(exon_info)
+        
+        results["exon_count"] = len(results["exons"])
+        
+        # Sort exons by start position
+        results["exons"].sort(key=lambda x: x.get("start", 0))
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Request failed for getExons {gencode_id}: {e}")
+        results["error"] = str(e)
+    
+    return results
+
 def medianJunctionExpression(gencode_id: str, tissues: List[str]) -> Dict[str, Any]:
     """
     Query the GTEx API for median junction expression data.
