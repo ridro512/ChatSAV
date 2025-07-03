@@ -22,6 +22,7 @@ from callGtex import (
     medianExonExpression, 
     medianJunctionExpression,
     topExpressedGenes,
+    getExons,
     call_gtex  # Keep for backward compatibility
 )
 from callLlm import call_llm
@@ -36,7 +37,7 @@ class ChatSAVPipeline:
         self.hg: Optional[str] = None
         self.distance: int = 50
         self.mask: int = 0
-        self.tissues: Optional[List[str]] = []
+        self.tissues: Optional[List[str]] = ["Whole_Blood"]
         self.spliceai_results: Optional[Dict[str, Any]] = None
         self.pangolin_results: Optional[Dict[str, Any]] = None
         self.gtex_results: Optional[Dict[str, Any]] = None
@@ -200,24 +201,6 @@ class ChatSAVPipeline:
                     print(f"  Donor Gain: {data['scores'].get('DP_DG')}")
                     print(f"  Donor Loss: {data['scores'].get('DP_DL')}")
                     print()
-                    
-                    # Highlight significant scores (>0.5)
-                    significant = []
-                    for score_type, label in [
-                        ('DS_AG', 'Acceptor Gain'),
-                        ('DS_AL', 'Acceptor Loss'), 
-                        ('DS_DG', 'Donor Gain'),
-                        ('DS_DL', 'Donor Loss')
-                    ]:
-                        score = float(data['scores'].get(score_type, 0))
-                        if score > 0.5:
-                            significant.append(f"{label} ({score})")
-                    
-                    if significant:
-                        print(f"Significant scores (>0.5): {', '.join(significant)}")
-                    else:
-                        print("No significant splice disruption predicted (all scores ≤0.5)")
-                    
                     print("-" * 60)
                 
         except Exception as e:
@@ -285,26 +268,6 @@ class ChatSAVPipeline:
                     print(f"  Splice Loss: {data['scores'].get('DP_SL')}")
                     print()
                     
-                    # Highlight significant scores (>0.5)
-                    significant = []
-                    for score_type, label in [
-                        ('DS_SG', 'Splice Gain'),
-                        ('DS_SL', 'Splice Loss')
-                    ]:
-                        score_val = data['scores'].get(score_type)
-                        if score_val is not None:
-                            try:
-                                score = float(score_val)
-                                if abs(score) > 0.5:  # Use abs() since splice loss can be negative
-                                    significant.append(f"{label} ({score})")
-                            except (ValueError, TypeError):
-                                pass
-                    
-                    if significant:
-                        print(f"Significant scores (|score| > 0.5): {', '.join(significant)}")
-                    else:
-                        print("No significant splice disruption predicted (all |scores| ≤ 0.5)")
-                    
                     # Show all non-zero scores if available
                     if self.pangolin_results.get('allNonZeroScores'):
                         print(f"\nAll affected positions within {self.distance}bp:")
@@ -328,7 +291,7 @@ class ChatSAVPipeline:
         """Select tissue type for GTEx analysis."""
         print("\n--- Tissue Type Selection ---")
         
-        tissues_input = input("\nPlease enter the tissue types you wish to analyse, seperated by commas (e.g., Whole_Blood, Brain_Cortex)):\n").strip()
+        tissues_input = input("\nPlease enter the tissue types you wish to analyse, seperated by commas (e.g., Whole_Blood, Brain_Cortex). Default: Whole_Blood):\n").strip()
         
         if tissues_input:
             tissue_list = [tissue.strip() for tissue in tissues_input.split(',')]
@@ -348,15 +311,17 @@ class ChatSAVPipeline:
         print("3. Median Exon Expression")
         print("4. Median Junction Expression")
         print("5. Top Expressed Genes (by tissue)")
+        print("6. Get Exons")
         
-        choice = input("\nSelect endpoint (1-5, default=1): ").strip()
+        choice = input("\nSelect endpoint (1-6, default=1): ").strip()
         
         endpoint_map = {
             "1": "medianGeneExpression",
             "2": "geneExpression",
             "3": "medianExonExpression",
             "4": "medianJunctionExpression",
-            "5": "topExpressedGenes"
+            "5": "topExpressedGenes",
+            "6": "getExons"
         }
         
         if choice in endpoint_map:
@@ -372,7 +337,7 @@ class ChatSAVPipeline:
         """Get GTEx expression results for the current variant and tissue."""
         print("\n--- Getting GTEx Results ---")
         
-        if not self.tissues:
+        if not self.tissues and self.gtex_endpoint != "getExons":
             print("Error: Please select tissue types first (Option 4)")
             return
         
@@ -429,6 +394,8 @@ class ChatSAVPipeline:
                         result = medianExonExpression(gencode_id, self.tissues)
                     elif self.gtex_endpoint == "medianJunctionExpression":
                         result = medianJunctionExpression(gencode_id, self.tissues)
+                    elif self.gtex_endpoint == "getExons":
+                        result = getExons(gencode_id)
                     
                     if 'error' not in result:
                         self.gtex_results[gencode_id] = result
@@ -462,6 +429,16 @@ class ChatSAVPipeline:
                             for tissue, data in result.get('junction_data', {}).items():
                                 print(f"\nTissue: {tissue}")
                                 print(f"  Junction count: {data.get('junction_count', 0)}")
+                        elif self.gtex_endpoint == "getExons":
+                            print(f"  Total exons: {result.get('exon_count', 0)}")
+                            for i, exon in enumerate(result.get('exons', [])[:5]):  # Show first 5
+                                exon_num = exon.get('exon_number', i+1)
+                                start = exon.get('start', 'N/A')
+                                end = exon.get('end', 'N/A')
+                                length = exon.get('length', 'N/A')
+                                print(f"  - Exon {exon_num}: {start}-{end} ({length} bp)")
+                            if result.get('exon_count', 0) > 5:
+                                print(f"  ... and {result.get('exon_count') - 5} more exons")
                     else:
                         print(f"Error getting GTEx data: {result['error']}")
             
