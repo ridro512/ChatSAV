@@ -221,7 +221,7 @@ def test_api_connectivity() -> None:
         
         # Try to create the client
         try:
-            API_KEY = "AIzaSyDk6NJZUysBCXV5oywr_8_gtrutcKFwpRg"
+            API_KEY = os.getenv("ALPHA_GENOME_API_KEY")
             dna_model = dna_client.create(API_KEY)
             print("✅ Client initialized successfully")
         except Exception as client_error:
