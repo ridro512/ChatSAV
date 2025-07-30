@@ -617,7 +617,7 @@ class ChatSAVPipeline:
                     invalid_tissues.append(tissue)
             
             if invalid_tissues:
-                print(f"\n⚠️  Warning: The following tissue IDs are not valid GTEx tissue types:")
+                print(f"\n Warning: The following tissue IDs are not valid GTEx tissue types:")
                 for tissue in invalid_tissues:
                     print(f"   - {tissue}")
                 print("\nValid tissue IDs include:")
@@ -984,7 +984,7 @@ class ChatSAVPipeline:
                         print("\nThank you for using ChatSAV!")
                         break
                     case _:
-                        print("Invalid choice. Please select a number from 0-11.")
+                        print("Invalid choice. Please select a number from 0-5.")
             
             except KeyboardInterrupt:
                 print("\n\nExiting ChatSAV...")
