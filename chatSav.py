@@ -22,8 +22,7 @@ from callGtex import (
     medianExonExpression, 
     medianJunctionExpression,
     topExpressedGenes,
-    getExons,
-    call_gtex  # Keep for backward compatibility
+    getExons
 )
 from callLlm import call_llm
 from chatLLM import ChatLLM
@@ -57,7 +56,7 @@ class ChatSAVPipeline:
     
     def __init__(self):
         self.variant_coord: Optional[str] = None
-        self.hg: Optional[str] = None
+        self.hg: Optional[str] = 38
         self.distance: int = 50
         self.mask: int = 0
         self.tissues: Optional[List[str]] = []
@@ -76,6 +75,10 @@ class ChatSAVPipeline:
     def wait_for_user(self) -> None:
         """Wait for user to press a key before continuing."""
         input("\nPress Enter to return to main menu...")
+
+    def wait_to_continue(self) -> None:
+        "Wait for user to press a key and continues to next step"
+        input("\nPress Enter to continue...")
 
     def parse_variant_coordinates(self, variant_coord: str) -> Tuple[str, int, str, str]:
         """
@@ -115,7 +118,7 @@ class ChatSAVPipeline:
         
         while True:
             hg = input(
-                "Please enter the genome build [37 for GRCh37/hg19] or [38 for GRCh38/hg38]:\n"
+                "Please enter the genome build [37 for GRCh37/hg19] or [38 for GRCh38/hg38] (default: hg38):\n"
             ).strip()
             
             if hg in ["37", "38"]:
@@ -123,11 +126,12 @@ class ChatSAVPipeline:
                 print(f"✓ Genome build set: GRCh{hg}")
                 break
             else:
-                print("Error: Please enter either '37' or '38'")
+                print(f"{hg} is not a valid build, defaulting to hg38\n")
+                break
             
         while True:
             dist = input(
-                "(Optional) Please enter the distance parameter of SpliceAI model (default: 50)\n"
+                "(Optional) Please enter the distance parameter of SpliceAI and Pangolin model (default: 50)\n"
             ).strip()
 
             try:
@@ -148,7 +152,7 @@ class ChatSAVPipeline:
                 mask = int(mask)
                 if mask in [0,1]:
                     self.mask = mask
-                    print(f"✓ SpliceAI mask set: {mask}")
+                    print(f"✓ SpliceAI and Pangolin mask set: {mask}")
                     break
                 else:
                     print(f"{mask} is not a valid option, defaulting to raw scores 0\n")
@@ -159,7 +163,7 @@ class ChatSAVPipeline:
 
         self.wait_for_user()
 
-    def get_spliceai_results(self) -> None:
+    def get_splice_results(self) -> None:
         """Get SpliceAI results for the current variant."""
         print("\n--- Getting SpliceAI Results ---")
         
@@ -228,21 +232,10 @@ class ChatSAVPipeline:
                 
         except Exception as e:
             print(f"Error: Failed to get SpliceAI results: {e}")
-        
-        self.wait_for_user()
 
-    def get_pangolin_results(self) -> None:
         """Get Pangolin results for the current variant."""
         print("\n--- Getting Pangolin Results ---")
-        
-        if not self.variant_coord or not self.hg:
-            print("Error: Please input variant coordinates first (Option 1)")
-            return
-        
-        print(f"Analyzing variant: {self.variant_coord} (GRCh{self.hg})")
-        print(f"Distance parameter: {self.distance}")
-        print(f"Mask parameter: {self.mask} (0 = raw score, 1 = masked score)")
-        
+
         try:
             self.pangolin_results = call_pangolin(self.variant_coord, self.hg, self.distance, self.mask)
             
@@ -306,7 +299,7 @@ class ChatSAVPipeline:
                 
         except Exception as e:
             print(f"Error: Failed to get Pangolin results: {e}")
-
+        
         self.wait_for_user()
 
 
@@ -358,7 +351,7 @@ class ChatSAVPipeline:
             else:
                 print("\nError: No valid tissue types provided. Please try again.")
 
-        self.wait_for_user()
+        self.wait_to_continue()
 
     def select_gtex_endpoint(self) -> None:
         """Select which GTEx API endpoint to use."""
@@ -388,7 +381,7 @@ class ChatSAVPipeline:
         else:
             print("Invalid choice, keeping default: medianGeneExpression")
         
-        self.wait_for_user()
+        self.wait_to_continue()
 
 
     def get_gtex_results(self) -> None:
@@ -503,7 +496,42 @@ class ChatSAVPipeline:
         except Exception as e:
             print(f"Error: Failed to get GTEx results: {e}")
         
-        self.wait_for_user()
+        self.wait_to_continue()
+
+    def gtex_submenu(self) -> None:
+        """GTEx analysis submenu."""
+        while True:
+            print("\n" + "=" * 60)
+            print("GTEx Analysis Submenu")
+            print("=" * 60)
+            
+            # Show current GTEx status
+            if self.tissues:
+                print(f"Current tissues: {', '.join(self.tissues)}")
+            else:
+                print("Current tissues: None selected")
+            print(f"Current endpoint: {self.gtex_endpoint}")
+            
+            print("\nOptions:")
+            print("1. Select tissue types")
+            print("2. Select GTEx endpoint")
+            print("3. Get GTEx results")
+            print("0. Return to main menu")
+            print("-" * 60)
+            
+            choice = input("Your choice: ").strip()
+            
+            if choice == "1":
+                self.select_tissue_type()
+            elif choice == "2":
+                self.select_gtex_endpoint()
+            elif choice == "3":
+                self.get_gtex_results()
+            elif choice == "0":
+                break
+            else:
+                print("Invalid choice. Please select a number from 0-3.")
+
 
     def input_context(self) -> None:
         "Provide context to the LLM to tweak query/output"
@@ -573,6 +601,43 @@ class ChatSAVPipeline:
             print("-" * 40)
             print(llm_results.get('llm_interpretation', 'No interpretation available'))
 
+    def llm_submenu(self) -> None:
+        """LLM analysis submenu."""
+        while True:
+            print("\n" + "=" * 60)
+            print("LLM Analysis Submenu")
+            print("=" * 60)
+            
+            # Show current LLM status
+            if self.context:
+                print(f"Current context: {self.context[:50]}..." if len(self.context) > 50 else f"Current context: {self.context}")
+            else:
+                print("Current context: None")
+            
+            if self.last_llm_results:
+                print("✓ Previous LLM analysis available")
+            
+            print("\nOptions:")
+            print("1. Input context for LLM")
+            print("2. Get LLM analysis")
+            print("3. Chat with LLM")
+            print("0. Return to main menu")
+            print("-" * 60)
+            
+            choice = input("Your choice: ").strip()
+            
+            if choice == "1":
+                self.input_context()
+            elif choice == "2":
+                self.get_llm_results()
+                self.wait_for_user()
+            elif choice == "3":
+                self.chat_with_llm()
+            elif choice == "0":
+                break
+            else:
+                print("Invalid choice. Please select a number from 0-3.")
+
     def display_menu(self) -> str:
         """Display the main menu and get user choice."""
         print("\n" + "=" * 60)
@@ -600,14 +665,9 @@ class ChatSAVPipeline:
         
         print("\nPlease select an option:")
         print("1. Input variant coordinates")
-        print("2. Get SpliceAI results")
-        print("3. Get Pangolin results")
-        print("4. Select tissue types")
-        print("5. Select GTEx endpoint")
-        print("6. Get GTEx results")
-        print("7. Get LLM analysis in natural language")
-        print("8. Input context for LLM")
-        print("9. Chat with LLM")
+        print("2. SpliceAI and Pangolin ")
+        print("3. GTEx")
+        print("4. LLM")
         print("0. Exit")
         print("-" * 60)
         
@@ -623,21 +683,11 @@ class ChatSAVPipeline:
                     case "1":
                         self.input_variant_coordinates()
                     case "2":
-                        self.get_spliceai_results()
+                        self.get_splice_results()
                     case "3":
-                        self.get_pangolin_results()
+                        self.gtex_submenu()
                     case "4":
-                        self.select_tissue_type()
-                    case "5":
-                        self.select_gtex_endpoint()
-                    case "6":
-                        self.get_gtex_results()
-                    case "7":
-                        self.get_llm_results()
-                    case "8":
-                        self.input_context()
-                    case "9":
-                        self.chat_with_llm()
+                        self.llm_submenu()
                     case "0":
                         print("\nThank you for using ChatSAV!")
                         break
