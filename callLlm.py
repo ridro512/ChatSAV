@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 """
 callLlm.py - File for calling LLM analysis of SpliceAI, Pangolin, AlphaGenome and GTEx results
 Integrates with OPENAI to provide genetic analysis
@@ -262,7 +264,7 @@ Provide a structured analysis with the following sections. Each section should c
    - Note any important limitations or uncertainties
 
 SCORING INTERPRETATION:
-- SpliceAI/Pangolin scores >0.5 are significant, >0.8 are high confidence
+- SpliceAI/Pangolin scores >0.2 are somewhat significant, >0.5 are significant, >0.8 are high confidence
 - AlphaGenome quantile scores >0.5 indicate significant tissue effects
 - When tools disagree, prioritize: (1) Tool agreement, (2) AlphaGenome multi-modal evidence, (3) Higher confidence scores
 

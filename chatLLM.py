@@ -228,7 +228,7 @@ class ChatLLM:
         
         if len(splice_tools) >= 2:
             scores = [score for _, score in splice_tools]
-            if all(s > 0.5 for s in scores):
+            if all(s > 0.2 for s in scores):
                 print("✓ Strong agreement: Both tools predict significant splice disruption")
             elif all(s <= 0.2 for s in scores):
                 print("✓ Strong agreement: Both tools predict minimal splice impact")
@@ -539,7 +539,7 @@ Provide conversational, helpful responses that:
 - Maintain a helpful, professional tone
 
 For splice prediction scores:
-- SpliceAI/Pangolin scores >0.5 are considered significant, >0.8 are high confidence
+- SpliceAI/Pangolin scores >0.2 are considered somewhat significant, >0.5 are significant, >0.8 are high confidence
 - AlphaGenome quantile scores >0.5 indicate significant tissue effects
 - When tools disagree, explain which prediction is more reliable and why
 
