@@ -97,6 +97,7 @@ def format_pangolin_data(pangolin_results: Optional[Dict[str, Any]]) -> str:
         * Splice Loss (DP_SL): {transcript.get('DP_SL', 0)}
         """
         formatted_data.append(transcript_info.strip())
+    
     return "\n\n".join(formatted_data)
 
 def format_alphagenome_data(alphagenome_results: Optional[Dict[str, Any]]) -> str:
