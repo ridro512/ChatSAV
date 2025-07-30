@@ -1192,8 +1192,7 @@ class ChatSAVPipeline:
         print("2. SpliceAI and Pangolin ")
         print("3. GTEx")
         print("4. LLM")
-        print("5. ALPHAGENOME PARAM")
-        print("6. ALPHAGENOME RESULTS")
+        print("5. AlphaGenome")
         print("0. Exit")
         print("-" * 60)
         
@@ -1215,8 +1214,6 @@ class ChatSAVPipeline:
                     case "4":
                         self.llm_submenu()
                     case "5":
-                        self.configure_alphagenome()
-                    case "6":
                         self.alphagenome_submenu()
                     case "0":
                         print("\nThank you for using ChatSAV!")
