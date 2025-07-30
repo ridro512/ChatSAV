@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-callLlm.py - File for calling LLM analysis of SpliceAI and GTEx results
+callLlm.py - File for calling LLM analysis of SpliceAI, Pangolin, AlphaGenome and GTEx results
 Integrates with OPENAI to provide genetic analysis
 
-Input: SpliceAI results, GTEx results, variant coordinates
-Output: LLM interpretation of SpliceAI and GTEx results
+Input: SpliceAI results, Pangolin results, AlphaGenome results, GTEx results, variant coordinates
+Output: LLM interpretation of all prediction results
 """
 
 import json
 import os
 from typing import Dict, Any, Optional, List
 
+
 # configure api keys from environmental variables
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     print("ERROR: OPENAI_API_KEY environment variable not set")
+    print("Please set your OpenAI API key: export OPENAI_API_KEY='your_api_key_here'")
     client = None
 else:
     try:
@@ -36,6 +38,7 @@ def format_transcript(splice_scores: List[Dict[str, Any]]) -> str:
 Transcript {i}:
 - Transcript ID: {transcript.get('transcript_id', 'Unknown')}
 - Gene ID: {transcript.get('ensembl_id', 'Unknown')}
+- Gene Name: {transcript.get('g_name', 'Unknown')}
 - Splice Disruption Scores:
   * Acceptor Gain (DS_AG): {transcript.get('DS_AG', 0)}
   * Acceptor Loss (DS_AL): {transcript.get('DS_AL', 0)}
@@ -49,14 +52,110 @@ Transcript {i}:
         formatted_data.append(transcript_info)
     return "\n".join(formatted_data)
 
+def format_pangolin_data(pangolin_results: Optional[Dict[str, Any]]) -> str:
+    """Format Pangolin results for LLM prompt."""
+    if not pangolin_results or 'error' in pangolin_results:
+        return "No Pangolin data available"
+    
+    formatted_data = []
+    for i, transcript in enumerate(pangolin_results.get('pangolin_scores', []), 1):
+        transcript_info = f"""
+Pangolin Transcript {i}:
+- Transcript ID: {transcript.get('transcript_id', 'Unknown')}
+- Gene ID: {transcript.get('ensembl_id', 'Unknown')}
+- Gene Name: {transcript.get('g_name', 'Unknown')}
+- Splice Disruption Scores:
+  * Splice Gain (DS_SG): {transcript.get('DS_SG', 0)}
+  * Splice Loss (DS_SL): {transcript.get('DS_SL', 0)}
+- Position Changes:
+  * Splice Gain (DP_SG): {transcript.get('DP_SG', 0)}
+  * Splice Loss (DP_SL): {transcript.get('DP_SL', 0)}"""
+        formatted_data.append(transcript_info)
+    
+    return "\n".join(formatted_data)
+
+def format_alphagenome_data(alphagenome_results: Optional[Dict[str, Any]]) -> str:
+    """Format AlphaGenome results for LLM prompt."""
+    if not alphagenome_results or 'error' in alphagenome_results:
+        return "No AlphaGenome data available"
+    
+    scores = alphagenome_results.get('alphagenome_scores', {})
+    formatted_parts = []
+    
+    # summary statistics
+    summary = scores.get('summary_stats', {})
+    if summary and 'error' not in summary:
+        formatted_parts.append(f"""
+AlphaGenome Summary:
+- Total predictions: {summary.get('total_predictions', 0)}
+- Significant effects (|score| > 0.5): {summary.get('significant_effects', 0)}
+- Mean quantile score: {summary.get('mean_quantile_score', 0):.3f}
+- Max absolute effect: {summary.get('max_absolute_effect', 0):.3f}
+- Unique tissues analyzed: {summary.get('unique_tissues', 0)}""")
+    
+    # splice predictions
+    splice_preds = scores.get('splice_predictions', {})
+    if splice_preds and 'error' not in splice_preds:
+        formatted_parts.append("\nAlphaGenome Splice Predictions:")
+        for splice_type, data in splice_preds.items():
+            if isinstance(data, dict) and 'total_predictions' in data:
+                formatted_parts.append(f"""
+- {splice_type.replace('_', ' ').title()}:
+  * Total predictions: {data.get('total_predictions', 0)}
+  * Significant predictions: {data.get('significant_predictions', 0)}
+  * Mean quantile score: {data.get('mean_quantile', 0):.3f}""")
+    
+    # expression predictions
+    expr_preds = scores.get('expression_predictions', {})
+    if expr_preds and 'error' not in expr_preds:
+        formatted_parts.append("\nAlphaGenome Expression Predictions:")
+        for expr_type, data in expr_preds.items():
+            if isinstance(data, dict) and 'total_predictions' in data:
+                formatted_parts.append(f"""
+- {expr_type.upper()}:
+  * Total predictions: {data.get('total_predictions', 0)}
+  * Upregulated: {data.get('upregulated_count', 0)}
+  * Downregulated: {data.get('downregulated_count', 0)}
+  * Mean effect: {data.get('mean_effect', 0):.3f}""")
+    
+    # chromatin predictions
+    chromatin_preds = scores.get('chromatin_predictions', {})
+    if chromatin_preds and 'error' not in chromatin_preds:
+        formatted_parts.append("\nAlphaGenome Chromatin Accessibility:")
+        for chrom_type, data in chromatin_preds.items():
+            if isinstance(data, dict) and 'total_predictions' in data:
+                formatted_parts.append(f"""
+- {chrom_type.upper()}:
+  * Total predictions: {data.get('total_predictions', 0)}
+  * Accessibility increase: {data.get('accessibility_increase', 0)}
+  * Accessibility decrease: {data.get('accessibility_decrease', 0)}""")
+    
+    # top predictions
+    top_preds = alphagenome_results.get('top_predictions', [])
+    if top_preds:
+        formatted_parts.append("\nTop AlphaGenome Predictions:")
+        for i, pred in enumerate(top_preds[:5], 1):  # Top 5
+            formatted_parts.append(f"""
+{i}. {pred.get('output_type', 'Unknown')} in {pred.get('biosample_name', 'Unknown')}:
+   - Quantile score: {pred.get('quantile_score', 0):.3f}
+   - Effect: {pred.get('effect_direction', 'unknown')}
+   - Significance: {pred.get('significance', 'unknown')}""")
+    
+    return "\n".join(formatted_parts) if formatted_parts else "AlphaGenome analysis completed but no interpretable results available"
+
 # construct a comprehensive prompt for the LLM
-# the structure follows: provides context for the variant, includes apliceAI and gtex data in json
+# the structure follows: provides context for the variant, includes spliceAI, pangolin, alphagenome and gtex data
 # gives LLM a clear analysis framework, request specific output
 # returning formatted prompt string for LLM
 def construct_prompt(spliceai_results: Dict[Any, Any], gtex_results: Dict[Any, Any],
-                     chrom: str, pos: int, ref: str, alt: str, context: Optional[str] = None) -> str:
+                     pangolin_results: Optional[Dict[Any, Any]] = None,
+                     alphagenome_results: Optional[Dict[Any, Any]] = None,
+                     chrom: str = None, pos: int = None, ref: str = None, alt: str = None, 
+                     context: Optional[str] = None) -> str:
     
     transcript_data = format_transcript(spliceai_results.get('splice_scores', []))
+    pangolin_data = format_pangolin_data(pangolin_results)
+    alphagenome_data = format_alphagenome_data(alphagenome_results)
 
     # include context if provided
     context_section = ""
@@ -69,15 +168,16 @@ Please consider this context when providing your analysis.
 """
         
     prompt = f"""You are an expert genetic analyst specializing in splice-altering variants (SAVs). 
-Please analyze the following genetic variant and provide a focused, concise evaluation for laboratory follow-up.
+Please analyze the following genetic variant using multiple prediction tools and provide a focused, concise evaluation for laboratory follow-up.
 
 CONSTRAINTS:
 - Provide ONLY the most relevant and accurate analysis
-- Focus on the transcript with the highest splice disruption scores
+- Focus on the most significant findings across all prediction tools
 - Give ONE clear recommendation per section, not multiple options
 - Be specific and actionable in your recommendations
 - Limit responses to essential information only
 - For experimental recommendations, suggest only the SINGLE most important/relevant test
+- When tools disagree, explain which prediction is more reliable and why
 
 VARIANT INFORMATION:
 - Chromosome: {chrom}
@@ -89,6 +189,12 @@ VARIANT INFORMATION:
 SPLICEAI PREDICTION DATA:
 {transcript_data}
 
+PANGOLIN PREDICTION DATA:
+{pangolin_data}
+
+ALPHAGENOME PREDICTION DATA:
+{alphagenome_data}
+
 GTEX EXPRESSION DATA:
 {json.dumps(gtex_results, indent=2)}
 {context_section}
@@ -96,40 +202,56 @@ GTEX EXPRESSION DATA:
 ANALYSIS FRAMEWORK:
 Provide a structured analysis with the following sections. Each section should contain ONLY the most relevant point:
 
-1. PRIMARY SPLICING IMPACT:
-   - Identify the transcript with highest disruption score (>0.5 is significant)
-   - State the most likely splicing mechanism affected
-   - One sentence summary of predicted impact
+1. COMPARATIVE SPLICE IMPACT ANALYSIS:
+   - Compare SpliceAI, Pangolin, and AlphaGenome predictions
+   - Identify the most reliable prediction and explain why
+   - State the consensus prediction or highlight key disagreements
+   - Focus on the transcript/gene with strongest evidence
 
-2. CLINICAL SIGNIFICANCE:
-   - State whether this variant is likely pathogenic based on the evidence
-   - Provide confidence level (High/Medium/Low)
-   - One key reason supporting your assessment
+2. MULTI-MODAL EVIDENCE INTEGRATION:
+   - Integrate splice predictions with AlphaGenome expression and chromatin data
+   - Assess whether expression changes support splice predictions
+   - Consider tissue-specific effects from AlphaGenome analysis
+   - One sentence summary of integrated evidence
 
-3. PATHOGENICITY ASSESSMENT:
+3. CLINICAL SIGNIFICANCE:
+   - State whether this variant is likely pathogenic based on ALL evidence
+   - Provide confidence level (High/Medium/Low) considering tool agreement
+   - Key reason supporting assessment using strongest evidence
+
+4. PATHOGENICITY ASSESSMENT:
    - Overall likelihood of being disease-causing
-   - Confidence level in prediction
-   - Key evidence supporting or refuting pathogenicity
+   - Confidence level based on tool consensus
+   - Most compelling evidence for or against pathogenicity
 
-4. EXPERIMENTAL PRIORITY:
+5. EXPERIMENTAL PRIORITY:
    - Assign priority level: High/Medium/Low
-   - Recommend the SINGLE most appropriate and important testing method
-   - Specify optimal tissue/cell type for testing
+   - Recommend the SINGLE most appropriate testing method
+   - Specify optimal tissue/cell type considering AlphaGenome tissue predictions
+   - Consider which experimental approach would best validate the predictions
 
-5. SUMMARY RECOMMENDATION:
+6. SUMMARY RECOMMENDATION:
    - One clear action item for the curator
    - Key consideration for experimental validation
+   - Note any important limitations or uncertainties
 
-For experimental recommendations, choose only the most critical test - do not list multiple options.
+SCORING INTERPRETATION:
+- SpliceAI/Pangolin scores >0.5 are significant, >0.8 are high confidence
+- AlphaGenome quantile scores >0.5 indicate significant tissue effects
+- When tools disagree, prioritize: (1) Tool agreement, (2) AlphaGenome multi-modal evidence, (3) Higher confidence scores
+
+For experimental recommendations, choose only the most critical test based on the strongest prediction evidence.
 Keep each section to 2-3 sentences maximum. Focus on actionable insights rather than general explanations."""
 
     return prompt
 
 # main function that calls OPENAI
-# construct a prompt with variant and prediction data
+# construct a prompt with variant and prediction data from all tools
 # extract information from the LLM response
 # return results in standardised format
 def call_llm(spliceai_results: Dict[Any, Any], gtex_results: Dict[Any, Any],
+             pangolin_results: Optional[Dict[Any, Any]] = None,
+             alphagenome_results: Optional[Dict[Any, Any]] = None,
              chrom: str = None, pos: int = None, ref: str = None, alt: str = None,
              context: Optional[str] = None,
              model: str = "gpt-4.1-nano", temperature: float = 0.3) -> Dict[str, Any]:
@@ -142,21 +264,44 @@ def call_llm(spliceai_results: Dict[Any, Any], gtex_results: Dict[Any, Any],
             "error": "OpenAI client not available"
         }
     try:
-        prompt = construct_prompt(spliceai_results, gtex_results, chrom, pos, ref, alt, context)
+        prompt = construct_prompt(spliceai_results, gtex_results, pangolin_results, 
+                                alphagenome_results, chrom, pos, ref, alt, context)
+        
+        # determine system message based on available tools
+        available_tools = []
+        if spliceai_results and 'error' not in spliceai_results:
+            available_tools.append("SpliceAI")
+        if pangolin_results and 'error' not in pangolin_results:
+            available_tools.append("Pangolin")
+        if alphagenome_results and 'error' not in alphagenome_results:
+            available_tools.append("AlphaGenome")
+        if gtex_results and 'error' not in gtex_results:
+            available_tools.append("GTEx")
+        
+        system_content = f"""You are an expert genetic analyst with access to multiple prediction tools: {', '.join(available_tools)}. 
+
+Provide focused, concise analysis with clear recommendations. When multiple tools are available:
+1. Compare and contrast their predictions
+2. Identify consensus or explain disagreements
+3. Weight evidence based on tool reliability and confidence scores
+4. Integrate multi-modal evidence (splice + expression + chromatin when available)
+
+Avoid redundancy and focus on the most relevant findings that inform clinical decision-making."""
+        
         # call openai
         response = client.chat.completions.create(
             model=model,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert genetic analyst. Provide focused, concise analysis with clear recommendations. Avoid redundancy and focus on the most relevant findings only."
+                    "content": system_content
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            max_tokens=1024,
+            max_tokens=1200,
             temperature=temperature
         )
         # extract text response
@@ -172,6 +317,7 @@ def call_llm(spliceai_results: Dict[Any, Any], gtex_results: Dict[Any, Any],
             "pathogenicity_assessment": pathogenicity,
             "experimental_recommendations": extract_experimental_recommendations(analysis_text),
             "model_used": model,
+            "tools_analyzed": available_tools,
             "prompt_used": prompt,
             "context_provided": context if context else "None"
         }        
@@ -191,6 +337,8 @@ def call_llm(spliceai_results: Dict[Any, Any], gtex_results: Dict[Any, Any],
 # medium by default
 def extract_priority_level(analysis_text: str) -> str:
     text_lower = analysis_text.lower()
+    
+    # check for explicit priority statements
     if any(phrase in text_lower for phrase in ["high priority", "priority: high", "priority level: high"]):
         return "high"
     elif any(phrase in text_lower for phrase in ["medium priority", "priority: medium", "priority level: medium"]):
@@ -198,16 +346,33 @@ def extract_priority_level(analysis_text: str) -> str:
     elif any(phrase in text_lower for phrase in ["low priority", "priority: low", "priority level: low"]):
         return "low"
     
-    if any(phrase in text_lower for phrase in ["significant disruption", "likely pathogenic", "high confidence"]):
+    # check for implicit high priority indicators
+    high_priority_indicators = [
+        "significant disruption", "likely pathogenic", "high confidence", "strong evidence",
+        "consensus prediction", "multiple tools agree", "tissue-specific", "functional impact"
+    ]
+    if any(phrase in text_lower for phrase in high_priority_indicators):
         return "high"
-    elif any(phrase in text_lower for phrase in ["uncertain", "moderate", "possible"]):
-        return "medium"
-    else:
+    
+    # check for implicit low priority indicators
+    low_priority_indicators = [
+        "conflicting predictions", "low confidence", "minimal effect", "unlikely pathogenic",
+        "benign", "no significant"
+    ]
+    if any(phrase in text_lower for phrase in low_priority_indicators):
         return "low"
+    
+    # check for uncertainty indicators
+    if any(phrase in text_lower for phrase in ["uncertain", "moderate", "possible", "disagreement"]):
+        return "medium"
+    
+    return "medium"
 
 # extract pathogenicity, looks for standard pathogenicity terms following ACMG guideline
 def extract_pathogenicity_assessment(analysis_text: str) -> str:
     text_lower = analysis_text.lower()
+    
+    # check for explicit pathogenicity statements
     if "likely pathogenic" in text_lower:
         return "likely_pathogenic"
     elif "possibly pathogenic" in text_lower or "probably pathogenic" in text_lower:
@@ -216,30 +381,59 @@ def extract_pathogenicity_assessment(analysis_text: str) -> str:
         return "likely_pathogenic"
     elif "likely benign" in text_lower:
         return "likely_benign"
-    elif "benign" in text_lower:
+    elif "benign" in text_lower and "not" not in text_lower.split("benign")[0][-20:]:
         return "likely_benign"
-    elif any(phrase in text_lower for phrase in ["uncertain significance", "uncertain", "unclear"]):
+    
+    # check for uncertainty indicators
+    uncertainty_indicators = [
+        "uncertain significance", "uncertain", "unclear", "conflicting evidence",
+        "tool disagreement", "moderate confidence"
+    ]
+    if any(phrase in text_lower for phrase in uncertainty_indicators):
         return "uncertain_significance"
-    else:
-        return "uncertain_significance"
+    
+    # check for pathogenic indicators
+    pathogenic_indicators = [
+        "disease-causing", "functional impact", "splice disruption", "expression change",
+        "significant effect", "consensus pathogenic"
+    ]
+    if any(phrase in text_lower for phrase in pathogenic_indicators):
+        return "likely_pathogenic"
+    
+    # check for benign indicators
+    benign_indicators = [
+        "no functional impact", "minimal effect", "unlikely disease", "normal expression"
+    ]
+    if any(phrase in text_lower for phrase in benign_indicators):
+        return "likely_benign"
+    
+    return "uncertain_significance"
 
 # identifies which in vitro testing methods openai recommends
 def extract_experimental_recommendations(analysis_text: str) -> str:
     """Identify the most important experimental recommendation from the LLM response."""
     text_lower = analysis_text.lower()
     
+    # priority order for experimental recommendations
     recommendation_priority = [
-        ("minigene_assay", ["minigene"]),
-        ("rt_pcr", ["rt-pcr", "rt pcr"]),
-        ("rna_seq", ["rna-seq", "rna seq", "transcriptome"]),
-        ("patient_sample_testing", ["patient sample", "patient tissue"]),
-        ("functional_assay", ["functional assay", "functional testing"]),
-        ("whole_blood_testing", ["whole blood"]),
+        ("minigene_assay", ["minigene", "splicing reporter"]),
+        ("rt_pcr", ["rt-pcr", "rt pcr", "reverse transcription"]),
+        ("rna_seq", ["rna-seq", "rna seq", "transcriptome", "rna sequencing"]),
+        ("patient_sample_testing", ["patient sample", "patient tissue", "clinical sample"]),
+        ("functional_assay", ["functional assay", "functional testing", "in vitro assay"]),
+        ("cell_culture_testing", ["cell culture", "tissue culture", "cultured cells"]),
+        ("whole_blood_testing", ["whole blood", "blood sample"]),
+        ("tissue_specific_testing", ["tissue-specific", "tissue specific"]),
+        ("alphagenome_validation", ["alphagenome", "multi-modal", "chromatin"]),
     ]
     
     for rec_code, keywords in recommendation_priority:
         for keyword in keywords:
             if keyword in text_lower:
                 return rec_code
+    
+    # check for general experimental terms
+    if any(term in text_lower for term in ["experiment", "testing", "validation", "assay"]):
+        return "functional_assay"
     
     return "manual_review_required"

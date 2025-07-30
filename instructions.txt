@@ -1,0 +1,47 @@
+Before running the program, please make sure to set up your OpenAI and AlphaGenome API Key:
+$env:OPENAI_API_KEY="your-key"
+$env:ALPHA_GENOME_API_KEY="your-key"
+
+The following packages also needed to be downloaded:
+pip install openai 
+pip install alphagenome 
+
+About using AlphaGenome:
+NOTE: AlphaGenome works best with GRCh38/hg38. GRCh37/hg19 may give less accurate results.
+SEQUENCE LENGTH SELECTION (Option 4):
+
+The sequence length determines how much DNA context around your variant 
+AlphaGenome analyzes:
+
+• 2KB (2,000 bases):
+  - Fastest analysis
+  - Focus on immediate splice sites
+  - Good for debugging or quick checks
+  - Use when: Testing or rapid screening
+
+• 16KB (16,000 bases):
+  - Moderate analysis time
+  - Captures nearby regulatory elements
+  - Good balance of speed vs comprehensiveness
+  - Use when: Standard analysis with time constraints
+
+• 100KB (100,000 bases) [DEFAULT]:
+  - Comprehensive analysis
+  - Captures distant regulatory elements
+  - Most complete predictions
+  - Use when: Thorough research analysis
+
+• 500KB (500,000 bases):
+  - Very comprehensive analysis
+  - Slowest but most complete
+  - Captures long-range regulatory effects
+  - Use when: Critical variants needing maximum detail
+
+• 1MB (1,000,000 bases):
+  - Maximum context analysis
+  - Longest analysis time
+  - Research-grade comprehensiveness
+  - Use when: Publication-quality analysis needed
+
+RECOMMENDATION: Start with 100KB for most analyses. Use 2KB for quick tests
+                or when the API is slow. Use 500KB+ for critical variants.'
