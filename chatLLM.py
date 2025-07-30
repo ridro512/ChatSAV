@@ -7,6 +7,7 @@ Handles all chat-related interactions with the LLM, including:
 - Context management
 - Conversation history
 - Help and summary functions
+- Support for SpliceAI, Pangolin, AlphaGenome, and GTEx data
 """
 
 from typing import List, Dict, Any, Optional
@@ -32,14 +33,20 @@ class ChatLLM:
         if not self.pipeline.spliceai_results:
             print("Warning: No SpliceAI results available. Please run SpliceAI analysis first (Option 2) for better chat experience.")
         
+        if not self.pipeline.pangolin_results:
+            print("Warning: No Pangolin results available. Consider running Pangolin analysis (Option 3) for comparative analysis.")
+        
+        if not self.pipeline.alphagenome_results:
+            print("Warning: No AlphaGenome results available. Consider running AlphaGenome analysis (Option 5) for multi-modal predictions.")
+        
         if not self.pipeline.gtex_results:
-            print("Warning: No GTEx results available. Please run GTEx analysis first (Option 6) for better chat experience.")
+            print("Warning: No GTEx results available. Please run GTEx analysis first (Option 8) for better chat experience.")
         
         # generate LLM analysis if we have the required data
         if hasattr(self.pipeline, 'last_llm_results') and self.pipeline.last_llm_results:
             print("Using existing LLM analysis results for chat context...")
             self.llm_analysis_results = self.pipeline.last_llm_results
-        elif self.pipeline.spliceai_results and self.pipeline.gtex_results:
+        elif self.pipeline.spliceai_results:  # Minimum requirement
             print("Generating comprehensive analysis for chat context...")
             self.generate_llm_analysis_for_chat()
         
@@ -73,24 +80,28 @@ class ChatLLM:
             available_data.append("SpliceAI predictions")
         if self.pipeline.pangolin_results:
             available_data.append("Pangolin predictions")
+        if self.pipeline.alphagenome_results:
+            available_data.append("AlphaGenome multi-modal predictions")
         if self.pipeline.gtex_results:
             available_data.append("GTEx expression data")
         if self.pipeline.context:
             available_data.append("User context")
         if self.llm_analysis_results:
-            available_data.append("LLM analysis results")
+            available_data.append("LLM comparative analysis")
         
         if available_data:
             print(f"Available data for discussion: {', '.join(available_data)}")
         else:
-            print("Note: Limited analysis data available. Consider running SpliceAI and GTEx analyses first.")
+            print("Note: Limited analysis data available. Consider running SpliceAI, Pangolin, AlphaGenome, and GTEx analyses first.")
     
     def generate_llm_analysis_for_chat(self) -> None:
         """Generate LLM analysis results to use as context for chat."""
         try:
             self.llm_analysis_results = call_llm(
-                self.pipeline.spliceai_results, 
-                self.pipeline.gtex_results, 
+                self.pipeline.spliceai_results or {}, 
+                self.pipeline.gtex_results or {},
+                self.pipeline.pangolin_results,
+                self.pipeline.alphagenome_results, 
                 self.pipeline.chrom, 
                 self.pipeline.pos, 
                 self.pipeline.ref, 
@@ -98,7 +109,7 @@ class ChatLLM:
                 self.pipeline.context,
                 model="gpt-4.1-nano"
             )
-            print("✓ Analysis generated for chat context")
+            print("✓ Multi-tool analysis generated for chat context")
         except Exception as e:
             print(f"Warning: Could not generate analysis for chat context: {e}")
             self.llm_analysis_results = None
@@ -109,6 +120,7 @@ class ChatLLM:
         print("- Type 'exit', 'quit', or 'back' to return to main menu")
         print("- Type 'summary' to get a quick overview of current findings")
         print("- Type 'analysis' to see the full LLM analysis")
+        print("- Type 'comparison' to see tool-by-tool comparison")
         print("- Type 'help' to see example questions")
         print("- Type 'clear' to clear conversation history")
         print("-" * 60)
@@ -125,12 +137,114 @@ class ChatLLM:
         elif command == 'analysis':
             self.show_full_analysis()
             return True
+        elif command == 'comparison':
+            self.show_tool_comparison()
+            return True
         elif command == 'clear':
             self.conversation_history.clear()
             print("Conversation history cleared.")
             return True
         
         return False
+    
+    def show_tool_comparison(self) -> None:
+        """Show a comparison of predictions across different tools."""
+        print("\n--- Tool-by-Tool Comparison ---")
+        print("=" * 50)
+        
+        # SpliceAI results
+        if self.pipeline.spliceai_results:
+            max_score, max_type, gene_name = self.get_max_spliceai_score()
+            print(f"SpliceAI: Highest score = {max_score} ({max_type}) in {gene_name}")
+        else:
+            print("SpliceAI: No results available")
+        
+        # Pangolin results
+        if self.pipeline.pangolin_results:
+            max_score, max_type, gene_name = self.get_max_pangolin_score()
+            print(f"Pangolin: Highest score = {max_score} ({max_type}) in {gene_name}")
+        else:
+            print("Pangolin: No results available")
+        
+        # AlphaGenome results
+        if self.pipeline.alphagenome_results:
+            alpha_summary = self.get_alphagenome_summary()
+            print(f"AlphaGenome: {alpha_summary}")
+        else:
+            print("AlphaGenome: No results available")
+        
+        # GTEx results
+        if self.pipeline.gtex_results:
+            gtex_summary = self.get_gtex_summary()
+            print(f"GTEx: {gtex_summary}")
+        else:
+            print("GTEx: No results available")
+        
+        # Tool agreement analysis
+        print("\n--- Tool Agreement Analysis ---")
+        self.analyze_tool_agreement()
+    
+    def get_alphagenome_summary(self) -> str:
+        """Get a summary of AlphaGenome predictions."""
+        if not self.pipeline.alphagenome_results:
+            return "No data"
+        
+        scores = self.pipeline.alphagenome_results.get('alphagenome_scores', {})
+        summary_stats = scores.get('summary_stats', {})
+        
+        if 'error' in summary_stats:
+            return "Analysis failed"
+        
+        total_preds = summary_stats.get('total_predictions', 0)
+        sig_effects = summary_stats.get('significant_effects', 0)
+        max_effect = summary_stats.get('max_absolute_effect', 0)
+        
+        return f"{total_preds} predictions, {sig_effects} significant (max effect: {max_effect:.3f})"
+    
+    def get_gtex_summary(self) -> str:
+        """Get a summary of GTEx expression data."""
+        if not self.pipeline.gtex_results:
+            return "No data"
+        
+        # actual implementation depends on GTEx result structure
+        if isinstance(self.pipeline.gtex_results, dict):
+            gene_count = len(self.pipeline.gtex_results)
+            tissues = self.pipeline.tissues or ["unknown"]
+            return f"{gene_count} genes analyzed in {len(tissues)} tissues"
+        
+        return "Expression data available"
+    
+    def analyze_tool_agreement(self) -> None:
+        """Analyze agreement between prediction tools."""
+        splice_tools = []
+        
+        if self.pipeline.spliceai_results:
+            max_score, _, _ = self.get_max_spliceai_score()
+            splice_tools.append(("SpliceAI", max_score))
+        
+        if self.pipeline.pangolin_results:
+            max_score, _, _ = self.get_max_pangolin_score()
+            splice_tools.append(("Pangolin", max_score))
+        
+        if len(splice_tools) >= 2:
+            scores = [score for _, score in splice_tools]
+            if all(s > 0.5 for s in scores):
+                print("✓ Strong agreement: Both tools predict significant splice disruption")
+            elif all(s <= 0.2 for s in scores):
+                print("✓ Strong agreement: Both tools predict minimal splice impact")
+            else:
+                print("⚠️ Disagreement: Tools show conflicting predictions")
+                for tool, score in splice_tools:
+                    print(f"  {tool}: {score}")
+        else:
+            print("Insufficient tools for agreement analysis")
+        
+        # AlphaGenome integration
+        if self.pipeline.alphagenome_results:
+            alpha_scores = self.pipeline.alphagenome_results.get('alphagenome_scores', {})
+            splice_preds = alpha_scores.get('splice_predictions', {})
+            if splice_preds and 'error' not in splice_preds:
+                print("AlphaGenome provides additional multi-modal evidence for validation")
     
     def show_full_analysis(self) -> None:
         """Show the full LLM analysis if available."""
@@ -140,11 +254,17 @@ class ChatLLM:
             print(f"Priority: {self.llm_analysis_results.get('priority_level', 'N/A')}")
             print(f"Pathogenicity: {self.llm_analysis_results.get('pathogenicity_assessment', 'N/A')}")
             print(f"Recommendations: {self.llm_analysis_results.get('experimental_recommendations', 'N/A')}")
+            
+            # Show which tools were analyzed
+            tools_analyzed = self.llm_analysis_results.get('tools_analyzed', [])
+            if tools_analyzed:
+                print(f"Tools analyzed: {', '.join(tools_analyzed)}")
+            
             print("\nDetailed Analysis:")
             print("-" * 30)
             print(self.llm_analysis_results.get('llm_interpretation', 'No analysis available'))
         else:
-            print("No LLM analysis available. Please run the full analysis first (Option 7) or ensure SpliceAI and GTEx data are available.")
+            print("No LLM analysis available. Please run the full analysis first (Option 9) or ensure prediction data is available.")
     
     def process_chat_question(self, user_input: str) -> None:
         """Process a regular chat question."""
@@ -183,6 +303,14 @@ class ChatLLM:
             print("• What does the Pangolin score tell us?")
             print("• Which model is more reliable for this variant?")
         
+        if self.pipeline.alphagenome_results:
+            print("\nAlphaGenome-specific questions:")
+            print("• What does AlphaGenome predict beyond splicing?")
+            print("• Which tissues show the strongest effects?")
+            print("• How do expression and chromatin predictions relate?")
+            print("• Does AlphaGenome support the splice predictions?")
+            print("• What multi-modal evidence is available?")
+        
         if self.pipeline.gtex_results:
             print("\nExpression-related questions:")
             print("• Is this gene expressed in the selected tissue?")
@@ -190,9 +318,10 @@ class ChatLLM:
             print("• What tissues should I test?")
         
         if self.llm_analysis_results:
-            print("\nAnalysis-based questions:")
+            print("\nComparative analysis questions:")
             print("• Why did you assign this priority level?")
-            print("• Can you elaborate on the pathogenicity assessment?")
+            print("• Which tool provides the strongest evidence?")
+            print("• How do the different predictions compare?")
             print("• What makes you recommend these experiments?")
             print("• What additional evidence would change your assessment?")
         
@@ -201,6 +330,7 @@ class ChatLLM:
         print("• How would you classify this variant's pathogenicity?")
         print("• What additional evidence would be helpful?")
         print("• Is this variant likely to cause disease?")
+        print("• Which prediction tool should I trust most?")
     
     # show a quick summary of current analysis results
     def show_quick_summary(self) -> None:
@@ -215,14 +345,20 @@ class ChatLLM:
             max_score, max_type, gene_name = self.get_max_pangolin_score()
             print(f"Pangolin: Highest score = {max_score} ({max_type}) in {gene_name}")
         
+        if self.pipeline.alphagenome_results:
+            alpha_summary = self.get_alphagenome_summary()
+            print(f"AlphaGenome: {alpha_summary}")
+        
         if self.pipeline.gtex_results:
-            expressed = "Yes" if self.pipeline.gtex_results.get('expressed') else "No"
-            tpm = self.pipeline.gtex_results.get('tpm', 'N/A')
-            print(f"GTEx: Expressed in {self.pipeline.gtex_results.get('tissue')}: {expressed} (TPM: {tpm})")
+            gtex_summary = self.get_gtex_summary()
+            print(f"GTEx: {gtex_summary}")
         
         if self.llm_analysis_results:
             print(f"LLM Assessment: {self.llm_analysis_results.get('pathogenicity_assessment', 'N/A')}")
             print(f"Priority: {self.llm_analysis_results.get('priority_level', 'N/A')}")
+            tools_analyzed = self.llm_analysis_results.get('tools_analyzed', [])
+            if tools_analyzed:
+                print(f"Tools compared: {', '.join(tools_analyzed)}")
         
         if self.pipeline.context:
             context_preview = self.pipeline.context[:100] + ('...' if len(self.pipeline.context) > 100 else '')
@@ -286,6 +422,9 @@ class ChatLLM:
             context_parts.append(f"- Priority Level: {self.llm_analysis_results.get('priority_level')}")
             context_parts.append(f"- Pathogenicity Assessment: {self.llm_analysis_results.get('pathogenicity_assessment')}")
             context_parts.append(f"- Experimental Recommendations: {self.llm_analysis_results.get('experimental_recommendations')}")
+            tools_analyzed = self.llm_analysis_results.get('tools_analyzed', [])
+            if tools_analyzed:
+                context_parts.append(f"- Tools Analyzed: {', '.join(tools_analyzed)}")
             context_parts.append(f"- Full Analysis: {self.llm_analysis_results.get('llm_interpretation', '')[:500]}...")
         
         # add SpliceAI results if available
@@ -312,13 +451,35 @@ class ChatLLM:
                     f"SG={transcript.get('DS_SG')}, SL={transcript.get('DS_SL')}"
                 )
         
+        # add AlphaGenome results if available
+        if self.pipeline.alphagenome_results:
+            context_parts.append("\nALPHAGENOME RESULTS:")
+            scores = self.pipeline.alphagenome_results.get('alphagenome_scores', {})
+            
+            # Summary stats
+            summary = scores.get('summary_stats', {})
+            if summary and 'error' not in summary:
+                context_parts.append(
+                    f"- Summary: {summary.get('total_predictions', 0)} predictions, "
+                    f"{summary.get('significant_effects', 0)} significant effects"
+                )
+            
+            # Top predictions
+            top_preds = self.pipeline.alphagenome_results.get('top_predictions', [])
+            if top_preds:
+                context_parts.append("- Top effects:")
+                for pred in top_preds[:3]:  # Top 3
+                    context_parts.append(
+                        f"  * {pred.get('output_type')} in {pred.get('biosample_name')}: "
+                        f"{pred.get('quantile_score', 0):.3f} ({pred.get('significance')})"
+                    )
+        
         # add GTEx results if available
         if self.pipeline.gtex_results:
             context_parts.append("\nGTEX EXPRESSION:")
-            context_parts.append(f"- Tissue: {self.pipeline.gtex_results.get('tissue')}")
-            context_parts.append(f"- TPM: {self.pipeline.gtex_results.get('tpm')}")
-            context_parts.append(f"- Expressed: {self.pipeline.gtex_results.get('expressed')}")
-            context_parts.append(f"- Percentile: {self.pipeline.gtex_results.get('percentile')}")
+            # Simplified representation - adapt based on actual GTEx result structure
+            context_parts.append(f"- Tissues analyzed: {', '.join(self.pipeline.tissues or ['Unknown'])}")
+            context_parts.append(f"- Genes analyzed: {len(self.pipeline.gtex_results) if isinstance(self.pipeline.gtex_results, dict) else 1}")
         
         # add user context if available
         if self.pipeline.context:
@@ -345,28 +506,42 @@ class ChatLLM:
             return "OpenAI client not properly configured. Please check callLlm.py setup."
         
         try:
-            system_prompt = """You are an expert genetic analyst having a conversation about a specific genetic variant.
+            # Determine available tools for system prompt
+            available_tools = []
+            if self.pipeline.spliceai_results:
+                available_tools.append("SpliceAI")
+            if self.pipeline.pangolin_results:
+                available_tools.append("Pangolin")
+            if self.pipeline.alphagenome_results:
+                available_tools.append("AlphaGenome")
+            if self.pipeline.gtex_results:
+                available_tools.append("GTEx")
+            
+            system_prompt = f"""You are an expert genetic analyst having a conversation about a specific genetic variant.
 
-You have access to comprehensive analysis results from a previous detailed assessment. Use this information to provide informed, consistent responses.
+You have access to comprehensive analysis results from multiple prediction tools: {', '.join(available_tools) if available_tools else 'SpliceAI only'}.
+
+Use this information to provide informed, consistent responses.
 
 CRITICAL: Maintain strict consistency with the previous analysis, especially:
 - Use the EXACT same priority level from the previous analysis
 - Use the EXACT same pathogenicity assessment from the previous analysis  
-- When discussing experimental recommendations, focus on the MOST IMPORTANT recommendation from the previous analysis, not additional ones
+- When discussing experimental recommendations, focus on the MOST IMPORTANT recommendation from the previous analysis
 - Do not suggest new experiments beyond what was already recommended in the formal analysis
 
 Provide conversational, helpful responses that:
 - Reference and build upon the previous LLM analysis when relevant
+- Compare predictions across different tools when appropriate
 - Answer the user's specific question clearly and accurately
-- Explain your reasoning based on the available data
+- Explain your reasoning based on the available multi-tool data
 - Maintain strict consistency with previous assessments 
 - Explain complex genetic concepts in accessible terms
 - Maintain a helpful, professional tone
 
 For splice prediction scores:
-- Scores >0.5 are considered significant
-- DS_AG = Acceptor Gain, DS_AL = Acceptor Loss, DS_DG = Donor Gain, DS_DL = Donor Loss
-- Higher scores indicate higher confidence in the prediction
+- SpliceAI/Pangolin scores >0.5 are considered significant, >0.8 are high confidence
+- AlphaGenome quantile scores >0.5 indicate significant tissue effects
+- When tools disagree, explain which prediction is more reliable and why
 
 When referencing previous analysis, be specific about what led to those conclusions and maintain the same conclusions."""
             
@@ -374,7 +549,7 @@ When referencing previous analysis, be specific about what led to those conclusi
 
 USER QUESTION: {user_question}
 
-Please provide a helpful response based on the available information about this variant."""
+Please provide a helpful response based on the available multi-tool information about this variant."""
             
             # call OpenAI
             response = client.chat.completions.create(

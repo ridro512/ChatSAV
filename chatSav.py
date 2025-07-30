@@ -16,6 +16,7 @@ from typing import Tuple, Dict, Any, Optional, List
 
 from callSplice import call_splice
 from callPangolin import call_pangolin
+from callAlphaGenome import call_alphagenome
 from callGtex import (
     medianGeneExpression, 
     geneExpression, 
@@ -54,6 +55,8 @@ class ChatSAVPipeline:
         "Spleen", "Stomach", "Testis", "Thyroid", "Uterus", "Vagina", 
         "Whole_Blood"
     }
+
+    ALPHAGENOME_SEQUENCE_LENGTHS = ["2KB", "16KB", "100KB", "500KB", "1MB"]
     
     def __init__(self):
         self.variant_coord: Optional[str] = None
@@ -64,6 +67,8 @@ class ChatSAVPipeline:
         self.spliceai_results: Optional[Dict[str, Any]] = None
         self.pangolin_results: Optional[Dict[str, Any]] = None
         self.gtex_results: Optional[Dict[str, Any]] = None
+        self.alphagenome_results: Optional[Dict[str, Any]] = None
+        self.alphagenome_sequence_length: str = "100KB"
         self.context: Optional[str] = None
         self.chrom: Optional[str] = None
         self.pos: Optional[int] = None
@@ -309,6 +314,283 @@ class ChatSAVPipeline:
 
         self.wait_for_user()
 
+    def configure_alphagenome(self) -> None:
+        """Configure AlphaGenome analysis parameters."""
+        print("\n--- Configure AlphaGenome Parameters ---")
+        
+        print(f"Current sequence length: {self.alphagenome_sequence_length}")
+        print("\nAvailable sequence lengths:")
+        for i, length in enumerate(self.ALPHAGENOME_SEQUENCE_LENGTHS, 1):
+            print(f"{i}. {length}")
+        
+        choice = input(f"\nSelect sequence length (1-{len(self.ALPHAGENOME_SEQUENCE_LENGTHS)}, default=current): ").strip()
+        
+        try:
+            if choice:
+                idx = int(choice) - 1
+                if 0 <= idx < len(self.ALPHAGENOME_SEQUENCE_LENGTHS):
+                    self.alphagenome_sequence_length = self.ALPHAGENOME_SEQUENCE_LENGTHS[idx]
+                    print(f"✓ AlphaGenome sequence length set to: {self.alphagenome_sequence_length}")
+                else:
+                    print("Invalid choice, keeping current setting")
+        except ValueError:
+            print("Invalid choice, keeping current setting")
+        
+        self.wait_for_user()
+
+    def get_alphagenome_results(self) -> None:
+        """Get AlphaGenome results for the current variant."""
+        print("\n--- Getting AlphaGenome Results ---")
+        
+        if not self.variant_coord or not self.hg:
+            print("Error: Please input variant coordinates first (Option 1)")
+            return
+        
+        print(f"Analyzing variant: {self.variant_coord} (GRCh{self.hg})")
+        print(f"Sequence length: {self.alphagenome_sequence_length}")
+        
+        if self.hg == "37":
+            print("⚠️  Warning: AlphaGenome is optimized for GRCh38. Results for GRCh37 may be less accurate.")
+        
+        try:
+            print("Calling AlphaGenome API (this may take a few moments)...")
+            self.alphagenome_results = call_alphagenome(
+                self.variant_coord, 
+                self.hg, 
+                self.alphagenome_sequence_length
+            )
+            
+            if 'error' in self.alphagenome_results:
+                print(f"Error calling AlphaGenome: {self.alphagenome_results['error']}")
+            else:
+                print("\n✓ AlphaGenome Results:")
+                print("=" * 70)
+                
+                print(f"Variant: {self.alphagenome_results.get('variant')}")
+                print(f"Genome build: {self.alphagenome_results.get('genome_build')}")
+                print(f"Sequence length: {self.alphagenome_results.get('sequence_length')}")
+                
+                # Add general explanation
+                print("\n" + "ℹ️  INTERPRETATION GUIDE".center(70))
+                print("• Quantile scores range from -1.0 to +1.0")
+                print("• Scores >0.5 or <-0.5 are considered significant")
+                print("• Scores >0.8 or <-0.8 indicate high confidence predictions")
+                print("• Positive scores = increase, Negative scores = decrease")
+                print("=" * 70)
+                
+                scores = self.alphagenome_results.get('alphagenome_scores', {})
+                
+                # Display splice predictions
+                splice_preds = scores.get('splice_predictions', {})
+                if splice_preds and 'error' not in splice_preds:
+                    print("\n🧬 SPLICE PREDICTIONS:")
+                    print("   (How the variant affects RNA splicing)")
+                    print("-" * 50)
+                    
+                    for splice_type, data in splice_preds.items():
+                        if isinstance(data, dict) and 'total_predictions' in data:
+                            print(f"\n{splice_type.replace('_', ' ').title()}:")
+                            if splice_type == 'splice_sites':
+                                print("   → Predicts creation/disruption of splice sites")
+                            elif splice_type == 'splice_site_usage':
+                                print("   → Predicts if splice sites will be actively used")
+                            
+                            print(f"  Total predictions: {data.get('total_predictions', 0)}")
+                            sig_count = data.get('significant_predictions', 0)
+                            total_count = data.get('total_predictions', 0)
+                            print(f"  Significant effects: {sig_count} ({sig_count/total_count*100:.1f}% of tissues)" if total_count > 0 else f"  Significant effects: {sig_count}")
+                            
+                            if data.get('mean_quantile') is not None:
+                                mean_score = data.get('mean_quantile', 0)
+                                print(f"  Mean quantile score: {mean_score:.3f}", end="")
+                                if abs(mean_score) > 0.8:
+                                    print(" (🔴 VERY HIGH impact)")
+                                elif abs(mean_score) > 0.5:
+                                    print(" (🟡 HIGH impact)")
+                                elif abs(mean_score) > 0.2:
+                                    print(" (🟢 MODERATE impact)")
+                                else:
+                                    print(" (⚪ LOW impact)")
+                            
+                            # Show top tissues if available
+                            top_tissues = data.get('top_tissues', [])
+                            if top_tissues:
+                                print("  Top affected tissues:")
+                                for tissue in top_tissues[:3]:
+                                    if isinstance(tissue, dict):
+                                        effect_score = tissue.get('max_effect', 0)
+                                        effect_icon = "🔴" if abs(effect_score) > 0.8 else "🟡" if abs(effect_score) > 0.5 else "🟢"
+                                        print(f"    {effect_icon} {tissue.get('tissue', 'Unknown')}: {effect_score:.3f}")
+                
+                # Display expression predictions
+                expr_preds = scores.get('expression_predictions', {})
+                if expr_preds and 'error' not in expr_preds:
+                    print("\n📊 EXPRESSION PREDICTIONS:")
+                    print("   (How the variant affects gene expression levels)")
+                    print("-" * 50)
+                    
+                    for expr_type, data in expr_preds.items():
+                        if isinstance(data, dict) and 'total_predictions' in data:
+                            print(f"\n{expr_type.replace('_', ' ').upper()}:")
+                            if expr_type == 'rna_seq':
+                                print("   → Measures overall gene expression changes")
+                            elif expr_type == 'cage':
+                                print("   → Measures transcription start site activity")
+                            
+                            total = data.get('total_predictions', 0)
+                            up_count = data.get('upregulated_count', 0)
+                            down_count = data.get('downregulated_count', 0)
+                            
+                            print(f"  Total predictions: {total}")
+                            print(f"  Upregulated: {up_count} ({up_count/total*100:.1f}% of tissues)" if total > 0 else f"  Upregulated: {up_count}")
+                            print(f"  Downregulated: {down_count} ({down_count/total*100:.1f}% of tissues)" if total > 0 else f"  Downregulated: {down_count}")
+                            
+                            if data.get('mean_effect') is not None:
+                                mean_effect = data.get('mean_effect', 0)
+                                print(f"  Mean effect: {mean_effect:.3f}", end="")
+                                if mean_effect < -0.8:
+                                    print(" (🔴 STRONG downregulation)")
+                                elif mean_effect < -0.5:
+                                    print(" (🟡 MODERATE downregulation)")
+                                elif mean_effect < -0.2:
+                                    print(" (🟢 MILD downregulation)")
+                                elif mean_effect > 0.8:
+                                    print(" (🔴 STRONG upregulation)")
+                                elif mean_effect > 0.5:
+                                    print(" (🟡 MODERATE upregulation)")
+                                elif mean_effect > 0.2:
+                                    print(" (🟢 MILD upregulation)")
+                                else:
+                                    print(" (⚪ MINIMAL effect)")
+                
+                # Display chromatin predictions
+                chromatin_preds = scores.get('chromatin_predictions', {})
+                if chromatin_preds and 'error' not in chromatin_preds:
+                    print("\n🔬 CHROMATIN ACCESSIBILITY PREDICTIONS:")
+                    print("   (How the variant affects DNA accessibility for regulation)")
+                    print("-" * 50)
+                    
+                    for chrom_type, data in chromatin_preds.items():
+                        if isinstance(data, dict) and 'total_predictions' in data:
+                            print(f"\n{chrom_type.upper()}:")
+                            if chrom_type == 'atac':
+                                print("   → ATAC-seq: Measures chromatin accessibility")
+                            elif chrom_type == 'dnase':
+                                print("   → DNase-seq: Measures DNA accessibility")
+                            
+                            total = data.get('total_predictions', 0)
+                            inc_count = data.get('accessibility_increase', 0)
+                            dec_count = data.get('accessibility_decrease', 0)
+                            
+                            print(f"  Total predictions: {total}")
+                            print(f"  Accessibility increase: {inc_count} ({inc_count/total*100:.1f}% of tissues)" if total > 0 else f"  Accessibility increase: {inc_count}")
+                            print(f"  Accessibility decrease: {dec_count} ({dec_count/total*100:.1f}% of tissues)" if total > 0 else f"  Accessibility decrease: {dec_count}")
+                            
+                            # Add interpretation
+                            if inc_count > dec_count:
+                                print("   💡 Net effect: More open chromatin (easier transcription factor binding)")
+                            elif dec_count > inc_count:
+                                print("   💡 Net effect: More closed chromatin (harder transcription factor binding)")
+                            else:
+                                print("   💡 Net effect: Balanced accessibility changes")
+                
+                # Display summary statistics
+                summary = scores.get('summary_stats', {})
+                if summary and 'error' not in summary:
+                    print("\n📈 SUMMARY STATISTICS:")
+                    print("-" * 50)
+                    total_preds = summary.get('total_predictions', 0)
+                    sig_effects = summary.get('significant_effects', 0)
+                    mean_score = summary.get('mean_quantile_score', 0)
+                    max_effect = summary.get('max_absolute_effect', 0)
+                    tissues = summary.get('unique_tissues', 0)
+                    
+                    print(f"Total predictions: {total_preds}")
+                    print(f"Significant effects: {sig_effects} ({sig_effects/total_preds*100:.1f}% of all predictions)" if total_preds > 0 else f"Significant effects: {sig_effects}")
+                    print(f"Mean quantile score: {mean_score:.3f}", end="")
+                    if abs(mean_score) > 0.5:
+                        print(" (Overall significant impact)")
+                    else:
+                        print(" (Overall moderate impact)")
+                    
+                    print(f"Max absolute effect: {max_effect:.3f}", end="")
+                    if max_effect > 0.8:
+                        print(" (Very strong tissue-specific effects)")
+                    elif max_effect > 0.5:
+                        print(" (Strong tissue-specific effects)")
+                    else:
+                        print(" (Moderate tissue-specific effects)")
+                    
+                    print(f"Unique tissues analyzed: {tissues}")
+                
+                # Display top predictions
+                top_preds = self.alphagenome_results.get('top_predictions', [])
+                if top_preds:
+                    print("\n🎯 TOP PREDICTIONS:")
+                    print("   (Strongest predicted effects across all tissues)")
+                    print("-" * 50)
+                    for i, pred in enumerate(top_preds[:5], 1):  # Show top 5
+                        score = pred.get('quantile_score', 0)
+                        significance = pred.get('significance', 'unknown')
+                        effect_dir = pred.get('effect_direction', 'effect')
+                        
+                        # Add visual indicators
+                        if significance == 'high':
+                            icon = "🔴"
+                        elif significance == 'moderate':
+                            icon = "🟡"
+                        else:
+                            icon = "🟢"
+                        
+                        print(f"{i}. {icon} {pred.get('output_type', 'Unknown')} in {pred.get('biosample_name', 'Unknown')}")
+                        print(f"   Score: {score:.3f} ({significance} confidence {effect_dir})")
+                
+                # Show successful scorers info
+                if self.alphagenome_results.get('successful_scorers'):
+                    successful = self.alphagenome_results['successful_scorers']
+                    total_attempted = self.alphagenome_results.get('total_scorers_attempted', len(successful))
+                    print(f"\n🔧 MODEL PERFORMANCE:")
+                    print(f"Successful predictors: {len(successful)}/{total_attempted}")
+                    print(f"Active modules: {', '.join(successful)}")
+                    
+                    if len(successful) == total_attempted:
+                        print("✅ All AlphaGenome prediction modules worked successfully")
+                    elif len(successful) >= total_attempted * 0.8:
+                        print("✅ Most AlphaGenome prediction modules worked successfully")
+                    else:
+                        print("⚠️ Some AlphaGenome prediction modules failed")
+                
+                # Add overall interpretation
+                print(f"\n💡 OVERALL INTERPRETATION:")
+                print("-" * 50)
+                
+                # Determine overall impact level
+                summary = scores.get('summary_stats', {})
+                if summary and 'error' not in summary:
+                    sig_ratio = summary.get('significant_effects', 0) / max(summary.get('total_predictions', 1), 1)
+                    max_effect = summary.get('max_absolute_effect', 0)
+                    
+                    if sig_ratio > 0.8 and max_effect > 0.8:
+                        impact_level = "🔴 VERY HIGH IMPACT"
+                        interpretation = "This variant is predicted to have strong, widespread effects across multiple tissues and mechanisms."
+                    elif sig_ratio > 0.5 or max_effect > 0.5:
+                        impact_level = "🟡 HIGH IMPACT"
+                        interpretation = "This variant is predicted to have significant effects in multiple tissues."
+                    elif sig_ratio > 0.2 or max_effect > 0.3:
+                        impact_level = "🟢 MODERATE IMPACT"
+                        interpretation = "This variant is predicted to have moderate effects in some tissues."
+                    else:
+                        impact_level = "⚪ LOW IMPACT"
+                        interpretation = "This variant is predicted to have minimal functional effects."
+                    
+                    print(f"Impact Level: {impact_level}")
+                    print(f"Summary: {interpretation}")
+                    print("\n⚠️  Note: These are computational predictions. Experimental validation is recommended for clinical interpretation.")
+                
+        except Exception as e:
+            print(f"Error: Failed to get AlphaGenome results: {e}")
+        
+        self.wait_for_user()
 
     def select_tissue_type(self) -> None:
         """Select tissue type for GTEx analysis."""
@@ -532,7 +814,9 @@ class ChatSAVPipeline:
         try:
             llm_results = call_llm(
                 self.spliceai_results, 
-                self.gtex_results, 
+                self.gtex_results or {}, 
+                self.pangolin_results,
+                self.alphagenome_results,
                 self.chrom, 
                 self.pos, 
                 self.ref, 
@@ -590,6 +874,8 @@ class ChatSAVPipeline:
             status.append("✓ SpliceAI results available")
         if self.pangolin_results:
             status.append("✓ Pangolin results available")
+        if self.alphagenome_results:
+            status.append("✓ AlphaGenome results available")
         if self.gtex_results:
             status.append("✓ GTEx results available")
         
@@ -602,12 +888,14 @@ class ChatSAVPipeline:
         print("1. Input variant coordinates")
         print("2. Get SpliceAI results")
         print("3. Get Pangolin results")
-        print("4. Select tissue types")
-        print("5. Select GTEx endpoint")
-        print("6. Get GTEx results")
-        print("7. Get LLM analysis in natural language")
-        print("8. Input context for LLM")
-        print("9. Chat with LLM")
+        print("4. Configure AlphaGenome parameters")
+        print("5. Get AlphaGenome results")
+        print("6. Select tissue types")
+        print("7. Select GTEx endpoint")
+        print("8. Get GTEx results")
+        print("9. Get LLM analysis in natural language")
+        print("10. Input context for LLM")
+        print("11. Chat with LLM")
         print("0. Exit")
         print("-" * 60)
         
@@ -627,22 +915,26 @@ class ChatSAVPipeline:
                     case "3":
                         self.get_pangolin_results()
                     case "4":
-                        self.select_tissue_type()
+                        self.configure_alphagenome()
                     case "5":
-                        self.select_gtex_endpoint()
+                        self.get_alphagenome_results()
                     case "6":
-                        self.get_gtex_results()
+                        self.select_tissue_type()
                     case "7":
-                        self.get_llm_results()
+                        self.select_gtex_endpoint()
                     case "8":
-                        self.input_context()
+                        self.get_gtex_results()
                     case "9":
+                        self.get_llm_results()
+                    case "10":
+                        self.input_context()
+                    case "11":
                         self.chat_with_llm()
                     case "0":
                         print("\nThank you for using ChatSAV!")
                         break
                     case _:
-                        print("Invalid choice. Please select a number from 0-6.")
+                        print("Invalid choice. Please select a number from 0-11.")
             
             except KeyboardInterrupt:
                 print("\n\nExiting ChatSAV...")
