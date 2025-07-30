@@ -107,7 +107,7 @@ class ChatLLM:
                 self.pipeline.ref, 
                 self.pipeline.alt, 
                 self.pipeline.context,
-                model="gpt-4.1-nano"
+                model="gpt-4.1-mini"
             )
             print("✓ Multi-tool analysis generated for chat context")
         except Exception as e:

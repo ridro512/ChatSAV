@@ -254,7 +254,7 @@ def call_llm(spliceai_results: Dict[Any, Any], gtex_results: Dict[Any, Any],
              alphagenome_results: Optional[Dict[Any, Any]] = None,
              chrom: str = None, pos: int = None, ref: str = None, alt: str = None,
              context: Optional[str] = None,
-             model: str = "gpt-4.1-nano", temperature: float = 0.3) -> Dict[str, Any]:
+             model: str = "gpt-4.1-mini", temperature: float = 0.3) -> Dict[str, Any]:
     if not client:
         return {
             "llm_interpretation": "OpenAI client not initialized. Please check your API key.",
