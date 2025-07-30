@@ -107,7 +107,7 @@ class ChatLLM:
                 self.pipeline.ref, 
                 self.pipeline.alt, 
                 self.pipeline.context,
-                model="gpt-4.1-mini"
+                model="gpt-4o"
             )
             print("✓ Multi-tool analysis generated for chat context")
         except Exception as e:
@@ -553,7 +553,7 @@ Please provide a helpful response based on the available multi-tool information 
             
             # call OpenAI
             response = client.chat.completions.create(
-                model="gpt-4.1-nano",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": full_prompt}
