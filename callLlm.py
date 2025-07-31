@@ -75,71 +75,123 @@ Pangolin Transcript {i}:
     return "\n".join(formatted_data)
 
 def format_alphagenome_data(alphagenome_results: Optional[Dict[str, Any]]) -> str:
-    """Format AlphaGenome results for LLM prompt."""
+    """Format AlphaGenome results for LLM prompt - Fixed for actual result structure."""
     if not alphagenome_results or 'error' in alphagenome_results:
         return "No AlphaGenome data available"
     
-    scores = alphagenome_results.get('alphagenome_scores', {})
     formatted_parts = []
     
-    # summary statistics
-    summary = scores.get('summary_stats', {})
-    if summary and 'error' not in summary:
+    # Basic variant information
+    formatted_parts.append(f"""
+AlphaGenome Analysis:
+- Variant: {alphagenome_results.get('variant', 'Unknown')}
+- Sequence Length: {alphagenome_results.get('sequence_length', 'Unknown')}
+- Genome Build: {alphagenome_results.get('genome_build', 'Unknown')}""")
+    
+    # Interval information
+    interval = alphagenome_results.get('interval', {})
+    if interval:
         formatted_parts.append(f"""
-AlphaGenome Summary:
-- Total predictions: {summary.get('total_predictions', 0)}
-- Significant effects (|score| > 0.5): {summary.get('significant_effects', 0)}
-- Mean quantile score: {summary.get('mean_quantile_score', 0):.3f}
-- Max absolute effect: {summary.get('max_absolute_effect', 0):.3f}
-- Unique tissues analyzed: {summary.get('unique_tissues', 0)}""")
+- Analysis Interval: {interval.get('chromosome', 'Unknown')}:{interval.get('start', 'Unknown')}-{interval.get('end', 'Unknown')}
+- Interval Length: {interval.get('length', 0):,} bp""")
     
-    # splice predictions
-    splice_preds = scores.get('splice_predictions', {})
-    if splice_preds and 'error' not in splice_preds:
-        formatted_parts.append("\nAlphaGenome Splice Predictions:")
-        for splice_type, data in splice_preds.items():
-            if isinstance(data, dict) and 'total_predictions' in data:
+    # Process predictions for each output type
+    predictions = alphagenome_results.get('predictions', {})
+    for output_type, pred_data in predictions.items():
+        formatted_parts.append(f"\n{output_type} Predictions:")
+        
+        # Reference and alternate availability
+        if pred_data.get('reference_available'):
+            ref_summary = pred_data.get('reference_summary', {})
+            if ref_summary.get('tracks_available'):
+                stats = ref_summary.get('value_stats', {})
                 formatted_parts.append(f"""
-- {splice_type.replace('_', ' ').title()}:
-  * Total predictions: {data.get('total_predictions', 0)}
-  * Significant predictions: {data.get('significant_predictions', 0)}
-  * Mean quantile score: {data.get('mean_quantile', 0):.3f}""")
-    
-    # expression predictions
-    expr_preds = scores.get('expression_predictions', {})
-    if expr_preds and 'error' not in expr_preds:
-        formatted_parts.append("\nAlphaGenome Expression Predictions:")
-        for expr_type, data in expr_preds.items():
-            if isinstance(data, dict) and 'total_predictions' in data:
+  Reference Predictions:
+  - Tracks: {ref_summary.get('track_count', 0)}
+  - Mean value: {stats.get('mean', 0):.4f}
+  - Max value: {stats.get('max', 0):.4f}
+  - Non-zero predictions: {stats.get('non_zero_count', 0)}/{stats.get('total_count', 0)}""")
+        
+        if pred_data.get('alternate_available'):
+            alt_summary = pred_data.get('alternate_summary', {})
+            if alt_summary.get('tracks_available'):
+                stats = alt_summary.get('value_stats', {})
                 formatted_parts.append(f"""
-- {expr_type.upper()}:
-  * Total predictions: {data.get('total_predictions', 0)}
-  * Upregulated: {data.get('upregulated_count', 0)}
-  * Downregulated: {data.get('downregulated_count', 0)}
-  * Mean effect: {data.get('mean_effect', 0):.3f}""")
-    
-    # chromatin predictions
-    chromatin_preds = scores.get('chromatin_predictions', {})
-    if chromatin_preds and 'error' not in chromatin_preds:
-        formatted_parts.append("\nAlphaGenome Chromatin Accessibility:")
-        for chrom_type, data in chromatin_preds.items():
-            if isinstance(data, dict) and 'total_predictions' in data:
-                formatted_parts.append(f"""
-- {chrom_type.upper()}:
-  * Total predictions: {data.get('total_predictions', 0)}
-  * Accessibility increase: {data.get('accessibility_increase', 0)}
-  * Accessibility decrease: {data.get('accessibility_decrease', 0)}""")
-    
-    # top predictions
-    top_preds = alphagenome_results.get('top_predictions', [])
-    if top_preds:
-        formatted_parts.append("\nTop AlphaGenome Predictions:")
-        for i, pred in enumerate(top_preds[:5], 1):  # Top 5
+  Alternate Predictions:
+  - Tracks: {alt_summary.get('track_count', 0)}
+  - Mean value: {stats.get('mean', 0):.4f}
+  - Max value: {stats.get('max', 0):.4f}
+  - Non-zero predictions: {stats.get('non_zero_count', 0)}/{stats.get('total_count', 0)}""")
+        
+        # Prediction differences (variant effect)
+        pred_diff = pred_data.get('prediction_diff', {})
+        if pred_diff:
             formatted_parts.append(f"""
-{i}. {pred.get('output_type', 'Unknown')} in {pred.get('biosample_name', 'Unknown')}:
-   - Quantile score: {pred.get('quantile_score', 0):.3f}
-   - Effect: {pred.get('effect_direction', 'unknown')}
-   - Significance: {pred.get('significance', 'unknown')}""")
+  Variant Effect:
+  - Mean difference (ALT-REF): {pred_diff.get('mean_diff', 0):.4f}
+  - Max difference (ALT-REF): {pred_diff.get('max_diff', 0):.4f}
+  - Effect magnitude: {pred_diff.get('effect_magnitude', 0):.4f}""")
+    
+    # Process variant scores if available - FIXED SECTION
+    variant_scores = alphagenome_results.get('variant_scores', {})
+    if variant_scores:
+        formatted_parts.append("\nVariant Scoring Results:")
+        for output_type, scores_list in variant_scores.items():
+            # scores_list is a LIST of score results, not a single dict
+            if scores_list:  # Check if list has any items
+                formatted_parts.append(f"\n{output_type} Variant Scores:")
+                
+                # Process each scorer's results in the list
+                for i, score_data in enumerate(scores_list):
+                    if 'error' in score_data:
+                        formatted_parts.append(f"  Scorer {i+1}: Error - {score_data['error']}")
+                        continue
+                    
+                    scorer_type = score_data.get('scorer_type', 'Unknown')
+                    formatted_parts.append(f"""
+  Scorer {i+1} ({scorer_type}):
+  - Total genes analyzed: {score_data.get('total_genes', 0)}
+  - Total tracks analyzed: {score_data.get('total_tracks', 0)}""")
+                    
+                    # Summary statistics
+                    summary_stats = score_data.get('summary_stats', {})
+                    if summary_stats and 'error' not in summary_stats:
+                        formatted_parts.append(f"""
+  - Mean score: {summary_stats.get('mean_score', 0):.4f}
+  - Max absolute score: {summary_stats.get('max_score', 0):.4f}
+  - Significant effects (|score| > 0.1): {summary_stats.get('significant_scores', 0)}""")
+                    
+                    # Top affected genes
+                    top_genes = score_data.get('top_affected_genes', [])
+                    if top_genes:
+                        formatted_parts.append("\n  Top Affected Genes:")
+                        for j, gene in enumerate(top_genes[:3], 1):  # Top 3
+                            formatted_parts.append(f"""
+    {j}. {gene.get('gene_name', 'Unknown')} ({gene.get('gene_id', 'Unknown')}):
+       - Max effect: {gene.get('max_abs_score', 0):.4f}
+       - Mean effect: {gene.get('mean_abs_score', 0):.4f}""")
+                    
+                    # Splice-specific results
+                    splice_results = score_data.get('splice_specific_results', {})
+                    if splice_results and 'error' not in splice_results:
+                        formatted_parts.append(f"""
+  Splice Analysis:
+  - Total splice effects: {splice_results.get('total_splice_effects', 0)}
+  - Strong splice effects: {splice_results.get('strong_splice_effects', 0)}""")
+                        
+                        # Splice disruption genes
+                        disruption_genes = splice_results.get('splice_disruption_genes', [])
+                        if disruption_genes:
+                            formatted_parts.append(f"  - Splice disruption in {len(disruption_genes)} genes:")
+                            for gene in disruption_genes[:2]:  # Top 2
+                                formatted_parts.append(f"    * {gene['gene_name']}: {gene['disruption_score']:.4f}")
+                        
+                        # Splice enhancement genes
+                        enhancement_genes = splice_results.get('splice_enhancement_genes', [])
+                        if enhancement_genes:
+                            formatted_parts.append(f"  - Splice enhancement in {len(enhancement_genes)} genes:")
+                            for gene in enhancement_genes[:2]:  # Top 2
+                                formatted_parts.append(f"    * {gene['gene_name']}: {gene['enhancement_score']:.4f}")
     
     return "\n".join(formatted_parts) if formatted_parts else "AlphaGenome analysis completed but no interpretable results available"
 
@@ -210,7 +262,7 @@ Provide a structured analysis with the following sections. Each section should c
 
 2. MULTI-MODAL EVIDENCE INTEGRATION:
    - Integrate splice predictions with AlphaGenome expression and chromatin data
-   - Assess whether expression changes support splice predictions
+   - Assess whether AlphaGenome expression changes support splice predictions
    - Consider tissue-specific effects from AlphaGenome analysis
    - One sentence summary of integrated evidence
 
@@ -237,7 +289,8 @@ Provide a structured analysis with the following sections. Each section should c
 
 SCORING INTERPRETATION:
 - SpliceAI/Pangolin scores >0.5 are significant, >0.8 are high confidence
-- AlphaGenome quantile scores >0.5 indicate significant tissue effects
+- AlphaGenome effect magnitudes >0.1 indicate significant tissue effects
+- AlphaGenome prediction differences show direction and magnitude of variant impact
 - When tools disagree, prioritize: (1) Tool agreement, (2) AlphaGenome multi-modal evidence, (3) Higher confidence scores
 
 For experimental recommendations, choose only the most critical test based on the strongest prediction evidence.
@@ -285,6 +338,12 @@ Provide focused, concise analysis with clear recommendations. When multiple tool
 2. Identify consensus or explain disagreements
 3. Weight evidence based on tool reliability and confidence scores
 4. Integrate multi-modal evidence (splice + expression + chromatin when available)
+
+Special attention to AlphaGenome:
+- AlphaGenome provides multi-modal predictions (expression, chromatin, splicing)
+- Use AlphaGenome prediction differences (ALT-REF) to assess variant impact magnitude
+- Consider AlphaGenome tissue-specific effects for experimental design
+- Integrate AlphaGenome expression changes with splice predictions for comprehensive assessment
 
 Avoid redundancy and focus on the most relevant findings that inform clinical decision-making."""
         
@@ -349,7 +408,8 @@ def extract_priority_level(analysis_text: str) -> str:
     # check for implicit high priority indicators
     high_priority_indicators = [
         "significant disruption", "likely pathogenic", "high confidence", "strong evidence",
-        "consensus prediction", "multiple tools agree", "tissue-specific", "functional impact"
+        "consensus prediction", "multiple tools agree", "tissue-specific", "functional impact",
+        "large effect magnitude", "substantial expression change"
     ]
     if any(phrase in text_lower for phrase in high_priority_indicators):
         return "high"
@@ -357,7 +417,7 @@ def extract_priority_level(analysis_text: str) -> str:
     # check for implicit low priority indicators
     low_priority_indicators = [
         "conflicting predictions", "low confidence", "minimal effect", "unlikely pathogenic",
-        "benign", "no significant"
+        "benign", "no significant", "small effect magnitude", "minimal expression change"
     ]
     if any(phrase in text_lower for phrase in low_priority_indicators):
         return "low"
@@ -395,14 +455,15 @@ def extract_pathogenicity_assessment(analysis_text: str) -> str:
     # check for pathogenic indicators
     pathogenic_indicators = [
         "disease-causing", "functional impact", "splice disruption", "expression change",
-        "significant effect", "consensus pathogenic"
+        "significant effect", "consensus pathogenic", "large effect magnitude"
     ]
     if any(phrase in text_lower for phrase in pathogenic_indicators):
         return "likely_pathogenic"
     
     # check for benign indicators
     benign_indicators = [
-        "no functional impact", "minimal effect", "unlikely disease", "normal expression"
+        "no functional impact", "minimal effect", "unlikely disease", "normal expression",
+        "small effect magnitude"
     ]
     if any(phrase in text_lower for phrase in benign_indicators):
         return "likely_benign"
@@ -425,6 +486,7 @@ def extract_experimental_recommendations(analysis_text: str) -> str:
         ("whole_blood_testing", ["whole blood", "blood sample"]),
         ("tissue_specific_testing", ["tissue-specific", "tissue specific"]),
         ("alphagenome_validation", ["alphagenome", "multi-modal", "chromatin"]),
+        ("expression_testing", ["expression testing", "gene expression", "qpcr"]),
     ]
     
     for rec_code, keywords in recommendation_priority:
