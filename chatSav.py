@@ -558,7 +558,7 @@ class ChatSAVPipeline:
             return
         
         if not self.gtex_results:
-            print("Error: Please get GTEx results first (Option 6)")
+            print("Error: Please get GTEx results first (Option 3)")
             return
         
         try:

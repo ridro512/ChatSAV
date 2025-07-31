@@ -284,7 +284,7 @@ Provide a structured analysis with the following sections. Each section should c
 
 1. COMPARATIVE SPLICE IMPACT ANALYSIS:
    - Compare SpliceAI, Pangolin, and AlphaGenome predictions
-   - Identify the most reliable prediction and explain why
+   - Identify the most reliable prediction and explain why - usually AlphaGenome unless it is not consistent among the transcripts
    - State the consensus prediction or highlight key disagreements
    - Focus on the transcript/gene with strongest evidence
 
@@ -295,18 +295,16 @@ Provide a structured analysis with the following sections. Each section should c
    - One sentence summary of integrated evidence
 
 3. CLINICAL SIGNIFICANCE:
-   - State whether this variant is likely pathogenic based on ALL evidence
+   - State whether this variant is likely significant based on ALL evidence
    - Provide confidence level (High/Medium/Low) considering tool agreement
    - Key reason supporting assessment using strongest evidence
 
 4. PATHOGENICITY ASSESSMENT:
-   - Overall likelihood of being disease-causing
-   - Confidence level based on tool consensus
-   - Most compelling evidence for or against pathogenicity
+   - Explain how to test pathogenecity of the variant, include ACMG guideline
 
 5. EXPERIMENTAL PRIORITY:
    - Assign priority level: High/Medium/Low
-   - Recommend the SINGLE most appropriate testing method
+   - Recommend the SINGLE most appropriate testing method and additional testing methods
    - Specify optimal tissue/cell type considering AlphaGenome tissue predictions
    - Consider which experimental approach would best validate the predictions
 
