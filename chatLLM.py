@@ -34,13 +34,13 @@ class ChatLLM:
             print("Warning: No SpliceAI results available. Please run SpliceAI analysis first (Option 2) for better chat experience.")
         
         if not self.pipeline.pangolin_results:
-            print("Warning: No Pangolin results available. Consider running Pangolin analysis (Option 3) for comparative analysis.")
+            print("Warning: No Pangolin results available. Consider running Pangolin analysis (Option 2) for comparative analysis.")
         
         if not self.pipeline.alphagenome_results:
-            print("Warning: No AlphaGenome results available. Consider running AlphaGenome analysis (Option 5) for multi-modal predictions.")
+            print("Warning: No AlphaGenome results available. Consider running AlphaGenome analysis (Option 6) for multi-modal predictions.")
         
         if not self.pipeline.gtex_results:
-            print("Warning: No GTEx results available. Please run GTEx analysis first (Option 8) for better chat experience.")
+            print("Warning: No GTEx results available. Please run GTEx analysis first (Option 3) for better chat experience.")
         
         # generate LLM analysis if we have the required data
         if hasattr(self.pipeline, 'last_llm_results') and self.pipeline.last_llm_results:
@@ -185,21 +185,45 @@ class ChatLLM:
         self.analyze_tool_agreement()
     
     def get_alphagenome_summary(self) -> str:
-        """Get a summary of AlphaGenome predictions."""
+        """Get a summary of AlphaGenome predictions - Fixed for actual result structure."""
         if not self.pipeline.alphagenome_results:
             return "No data"
         
-        scores = self.pipeline.alphagenome_results.get('alphagenome_scores', {})
-        summary_stats = scores.get('summary_stats', {})
+        if 'error' in self.pipeline.alphagenome_results:
+            return f"Analysis failed: {self.pipeline.alphagenome_results['error']}"
         
-        if 'error' in summary_stats:
-            return "Analysis failed"
+        # Get basic info
+        variant = self.pipeline.alphagenome_results.get('variant', 'Unknown')
+        seq_length = self.pipeline.alphagenome_results.get('sequence_length', 'Unknown')
         
-        total_preds = summary_stats.get('total_predictions', 0)
-        sig_effects = summary_stats.get('significant_effects', 0)
-        max_effect = summary_stats.get('max_absolute_effect', 0)
+        # Count predictions and effects
+        predictions = self.pipeline.alphagenome_results.get('predictions', {})
+        variant_scores = self.pipeline.alphagenome_results.get('variant_scores', {})
         
-        return f"{total_preds} predictions, {sig_effects} significant (max effect: {max_effect:.3f})"
+        total_output_types = len(predictions)
+        significant_effects = 0
+        max_effect_magnitude = 0.0
+        
+        # Analyze prediction differences for effect magnitude
+        for output_type, pred_data in predictions.items():
+            pred_diff = pred_data.get('prediction_diff', {})
+            if pred_diff:
+                effect_mag = pred_diff.get('effect_magnitude', 0)
+                if effect_mag > 0.1:  # Threshold for significance
+                    significant_effects += 1
+                max_effect_magnitude = max(max_effect_magnitude, effect_mag)
+        
+        # Get gene count from variant scores - FIXED SECTION
+        total_genes = 0
+        for output_type, scores_list in variant_scores.items():
+            # scores_list is a LIST, need to iterate through it
+            if scores_list:  # Check if list has items
+                for score_data in scores_list:
+                    if 'error' not in score_data:
+                        gene_count = score_data.get('total_genes', 0)
+                        total_genes = max(total_genes, gene_count)
+        
+        return f"{seq_length} analysis, {total_output_types} output types, {significant_effects} significant effects (max: {max_effect_magnitude:.3f}), {total_genes} genes"
     
     def get_gtex_summary(self) -> str:
         """Get a summary of GTEx expression data."""
@@ -226,25 +250,58 @@ class ChatLLM:
             max_score, _, _ = self.get_max_pangolin_score()
             splice_tools.append(("Pangolin", max_score))
         
+        # Add AlphaGenome splice-related effects
+        if self.pipeline.alphagenome_results:
+            alpha_max_effect = self.get_max_alphagenome_effect()
+            if alpha_max_effect > 0:
+                splice_tools.append(("AlphaGenome", alpha_max_effect))
+        
         if len(splice_tools) >= 2:
             scores = [score for _, score in splice_tools]
-            if all(s > 0.2 for s in scores):
-                print("✓ Strong agreement: Both tools predict significant splice disruption")
+            if all(s > 0.5 for s in scores):
+                print("✓ Strong agreement: All tools predict significant effects")
             elif all(s <= 0.2 for s in scores):
-                print("✓ Strong agreement: Both tools predict minimal splice impact")
+                print("✓ Strong agreement: All tools predict minimal effects")
             else:
-                print("⚠️ Disagreement: Tools show conflicting predictions")
+                print("⚠️ Mixed predictions: Tools show varying confidence levels")
                 for tool, score in splice_tools:
-                    print(f"  {tool}: {score}")
+                    confidence = "High" if score > 0.8 else "Medium" if score > 0.5 else "Low"
+                    print(f"  {tool}: {score:.3f} ({confidence})")
         else:
-            print("Insufficient tools for agreement analysis")
+            print("Insufficient tools for comprehensive agreement analysis")
         
-        # AlphaGenome integration
+        # AlphaGenome multi-modal integration
         if self.pipeline.alphagenome_results:
-            alpha_scores = self.pipeline.alphagenome_results.get('alphagenome_scores', {})
-            splice_preds = alpha_scores.get('splice_predictions', {})
-            if splice_preds and 'error' not in splice_preds:
-                print("AlphaGenome provides additional multi-modal evidence for validation")
+            predictions = self.pipeline.alphagenome_results.get('predictions', {})
+            if predictions:
+                print("AlphaGenome provides multi-modal evidence (expression + chromatin + splicing)")
+    
+    def get_max_alphagenome_effect(self) -> float:
+        """Get the maximum effect magnitude from AlphaGenome predictions."""
+        if not self.pipeline.alphagenome_results:
+            return 0.0
+        
+        max_effect = 0.0
+        predictions = self.pipeline.alphagenome_results.get('predictions', {})
+        
+        for output_type, pred_data in predictions.items():
+            pred_diff = pred_data.get('prediction_diff', {})
+            if pred_diff:
+                effect_mag = pred_diff.get('effect_magnitude', 0)
+                max_effect = max(max_effect, effect_mag)
+        
+        # Also check variant scores - FIXED SECTION
+        variant_scores = self.pipeline.alphagenome_results.get('variant_scores', {})
+        for output_type, scores_list in variant_scores.items():
+            # scores_list is a LIST, need to iterate through it
+            if scores_list:  # Check if list has items
+                for score_data in scores_list:
+                    if 'error' not in score_data:
+                        summary_stats = score_data.get('summary_stats', {})
+                        max_score = abs(summary_stats.get('max_score', 0))
+                        max_effect = max(max_effect, max_score)
+        
+        return max_effect
     
     def show_full_analysis(self) -> None:
         """Show the full LLM analysis if available."""
@@ -264,7 +321,7 @@ class ChatLLM:
             print("-" * 30)
             print(self.llm_analysis_results.get('llm_interpretation', 'No analysis available'))
         else:
-            print("No LLM analysis available. Please run the full analysis first (Option 9) or ensure prediction data is available.")
+            print("No LLM analysis available. Please run the full analysis first (Option 4) or ensure prediction data is available.")
     
     def process_chat_question(self, user_input: str) -> None:
         """Process a regular chat question."""
@@ -306,10 +363,12 @@ class ChatLLM:
         if self.pipeline.alphagenome_results:
             print("\nAlphaGenome-specific questions:")
             print("• What does AlphaGenome predict beyond splicing?")
-            print("• Which tissues show the strongest effects?")
-            print("• How do expression and chromatin predictions relate?")
+            print("• Which output types show the strongest effects?")
+            print("• How do expression predictions compare to reference?")
             print("• Does AlphaGenome support the splice predictions?")
             print("• What multi-modal evidence is available?")
+            print("• Which genes show the highest effect scores?")
+            print("• What is the effect magnitude of this variant?")
         
         if self.pipeline.gtex_results:
             print("\nExpression-related questions:")
@@ -451,28 +510,32 @@ class ChatLLM:
                     f"SG={transcript.get('DS_SG')}, SL={transcript.get('DS_SL')}"
                 )
         
-        # add AlphaGenome results if available
+        # add AlphaGenome results if available - Updated for actual structure
         if self.pipeline.alphagenome_results:
             context_parts.append("\nALPHAGENOME RESULTS:")
-            scores = self.pipeline.alphagenome_results.get('alphagenome_scores', {})
+            context_parts.append(f"- Sequence Length: {self.pipeline.alphagenome_results.get('sequence_length', 'Unknown')}")
             
-            # Summary stats
-            summary = scores.get('summary_stats', {})
-            if summary and 'error' not in summary:
-                context_parts.append(
-                    f"- Summary: {summary.get('total_predictions', 0)} predictions, "
-                    f"{summary.get('significant_effects', 0)} significant effects"
-                )
-            
-            # Top predictions
-            top_preds = self.pipeline.alphagenome_results.get('top_predictions', [])
-            if top_preds:
-                context_parts.append("- Top effects:")
-                for pred in top_preds[:3]:  # Top 3
+            # Prediction summaries
+            predictions = self.pipeline.alphagenome_results.get('predictions', {})
+            for output_type, pred_data in predictions.items():
+                pred_diff = pred_data.get('prediction_diff', {})
+                if pred_diff:
                     context_parts.append(
-                        f"  * {pred.get('output_type')} in {pred.get('biosample_name')}: "
-                        f"{pred.get('quantile_score', 0):.3f} ({pred.get('significance')})"
+                        f"- {output_type}: Effect magnitude = {pred_diff.get('effect_magnitude', 0):.4f}, "
+                        f"Mean diff = {pred_diff.get('mean_diff', 0):.4f}"
                     )
+            
+            # Top affected genes from variant scores
+            variant_scores = self.pipeline.alphagenome_results.get('variant_scores', {})
+            for output_type, score_data in variant_scores.items():
+                if 'error' not in score_data:
+                    top_genes = score_data.get('top_affected_genes', [])
+                    if top_genes:
+                        context_parts.append(f"- {output_type} top affected genes:")
+                        for gene in top_genes[:3]:  # Top 3
+                            context_parts.append(
+                                f"  * {gene.get('gene_name')}: effect = {gene.get('max_abs_score', 0):.4f}"
+                            )
         
         # add GTEx results if available
         if self.pipeline.gtex_results:
@@ -529,6 +592,12 @@ CRITICAL: Maintain strict consistency with the previous analysis, especially:
 - When discussing experimental recommendations, focus on the MOST IMPORTANT recommendation from the previous analysis
 - Do not suggest new experiments beyond what was already recommended in the formal analysis
 
+AlphaGenome-specific guidance:
+- AlphaGenome effect magnitudes >0.1 indicate significant effects
+- Prediction differences show the direction and magnitude of variant impact (ALT-REF)
+- Consider multi-modal evidence (expression + chromatin + splicing) for comprehensive assessment
+- Top affected genes from variant scores provide gene-level impact assessment
+
 Provide conversational, helpful responses that:
 - Reference and build upon the previous LLM analysis when relevant
 - Compare predictions across different tools when appropriate
@@ -539,8 +608,8 @@ Provide conversational, helpful responses that:
 - Maintain a helpful, professional tone
 
 For splice prediction scores:
-- SpliceAI/Pangolin scores >0.2 are considered somewhat significant, >0.5 are significant, >0.8 are high confidence
-- AlphaGenome quantile scores >0.5 indicate significant tissue effects
+- SpliceAI/Pangolin scores >0.5 are considered significant, >0.8 are high confidence
+- AlphaGenome effect magnitudes >0.1 indicate significant tissue effects
 - When tools disagree, explain which prediction is more reliable and why
 
 When referencing previous analysis, be specific about what led to those conclusions and maintain the same conclusions."""
