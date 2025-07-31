@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 """
 callLlm.py - File for calling LLM analysis of SpliceAI, Pangolin, AlphaGenome and GTEx results
 Integrates with OPENAI to provide genetic analysis
@@ -35,22 +37,37 @@ def format_transcript(splice_scores: List[Dict[str, Any]]) -> str:
     formatted_data = []
     for i, transcript in enumerate(splice_scores, 1):
         transcript_info = f"""
-Transcript {i}:
-- Transcript ID: {transcript.get('transcript_id', 'Unknown')}
-- Gene ID: {transcript.get('ensembl_id', 'Unknown')}
-- Gene Name: {transcript.get('g_name', 'Unknown')}
-- Splice Disruption Scores:
-  * Acceptor Gain (DS_AG): {transcript.get('DS_AG', 0)}
-  * Acceptor Loss (DS_AL): {transcript.get('DS_AL', 0)}
-  * Donor Gain (DS_DG): {transcript.get('DS_DG', 0)}
-  * Donor Loss (DS_DL): {transcript.get('DS_DL', 0)}
-- Position Changes:
-  * Acceptor Gain (DP_AG): {transcript.get('DP_AG', 0)}
-  * Acceptor Loss (DP_AL): {transcript.get('DP_AL', 0)}
-  * Donor Gain (DP_DG): {transcript.get('DP_DG', 0)}
-  * Donor Loss (DP_DL): {transcript.get('DP_DL', 0)}"""
-        formatted_data.append(transcript_info)
-    return "\n".join(formatted_data)
+        Transcript {i}:
+        - Transcript ID: {transcript.get('transcript_id', 'Unknown')}
+        - Gene Name: {transcript.get('g_name', 'Unknown')}
+        - Ensembl Gene ID: {transcript.get('ensembl_id', 'Unknown')}
+        - Transcript Type: {transcript.get('t_type', 'Unknown')}
+        - Transcript Priority: {transcript.get('t_priority', 'Unknown')}
+        - Strand: {transcript.get('t_strand', 'Unknown')}
+        - RefSeq IDs: {', '.join(transcript.get('t_refseq_ids', [])) if transcript.get('t_refseq_ids') else 'None'}
+
+        Splice Disruption Scores (DS):
+        * Acceptor Gain (DS_AG): {transcript.get('DS_AG', 0)}
+            - Reference: {transcript.get('DS_AG_REF', 0)}
+            - Alternate: {transcript.get('DS_AG_ALT', 0)}
+        * Acceptor Loss (DS_AL): {transcript.get('DS_AL', 0)}
+            - Reference: {transcript.get('DS_AL_REF', 0)}
+            - Alternate: {transcript.get('DS_AL_ALT', 0)}
+        * Donor Gain (DS_DG): {transcript.get('DS_DG', 0)}
+            - Reference: {transcript.get('DS_DG_REF', 0)}
+            - Alternate: {transcript.get('DS_DG_ALT', 0)}
+        * Donor Loss (DS_DL): {transcript.get('DS_DL', 0)}
+            - Reference: {transcript.get('DS_DL_REF', 0)}
+            - Alternate: {transcript.get('DS_DL_ALT', 0)}
+
+        Position Changes (DP in bp from variant site):
+        * Acceptor Gain (DP_AG): {transcript.get('DP_AG', 0)}
+        * Acceptor Loss (DP_AL): {transcript.get('DP_AL', 0)}
+        * Donor Gain (DP_DG): {transcript.get('DP_DG', 0)}
+        * Donor Loss (DP_DL): {transcript.get('DP_DL', 0)}
+        """
+        formatted_data.append(transcript_info.strip())
+    return "\n\n".join(formatted_data)
 
 def format_pangolin_data(pangolin_results: Optional[Dict[str, Any]]) -> str:
     """Format Pangolin results for LLM prompt."""
@@ -60,19 +77,30 @@ def format_pangolin_data(pangolin_results: Optional[Dict[str, Any]]) -> str:
     formatted_data = []
     for i, transcript in enumerate(pangolin_results.get('pangolin_scores', []), 1):
         transcript_info = f"""
-Pangolin Transcript {i}:
-- Transcript ID: {transcript.get('transcript_id', 'Unknown')}
-- Gene ID: {transcript.get('ensembl_id', 'Unknown')}
-- Gene Name: {transcript.get('g_name', 'Unknown')}
-- Splice Disruption Scores:
-  * Splice Gain (DS_SG): {transcript.get('DS_SG', 0)}
-  * Splice Loss (DS_SL): {transcript.get('DS_SL', 0)}
-- Position Changes:
-  * Splice Gain (DP_SG): {transcript.get('DP_SG', 0)}
-  * Splice Loss (DP_SL): {transcript.get('DP_SL', 0)}"""
-        formatted_data.append(transcript_info)
+        Pangolin Transcript {i}:
+        - Transcript ID: {transcript.get('transcript_id', 'Unknown')}
+        - Gene Name: {transcript.get('g_name', 'Unknown')}
+        - Ensembl Gene ID: {transcript.get('ensembl_id', 'Unknown')}
+        - Transcript Type: {transcript.get('t_type', 'Unknown')}
+        - Transcript Priority: {transcript.get('t_priority', 'Unknown')}
+        - Strand: {transcript.get('t_strand', 'Unknown')}
+        - RefSeq IDs: {', '.join(transcript.get('t_refseq_ids', [])) if transcript.get('t_refseq_ids') else 'None'}
+
+        Splice Disruption Scores (DS):
+        * Splice Gain (DS_SG): {transcript.get('DS_SG', 0)}
+            - Reference: {transcript.get('SG_REF', 0)}
+            - Alternate: {transcript.get('SG_ALT', 0)}
+        * Splice Loss (DS_SL): {transcript.get('DS_SL', 0)}
+            - Reference: {transcript.get('SL_REF', 0)}
+            - Alternate: {transcript.get('SL_ALT', 0)}
+
+        Position Changes (DP in bp from variant site):
+        * Splice Gain (DP_SG): {transcript.get('DP_SG', 0)}
+        * Splice Loss (DP_SL): {transcript.get('DP_SL', 0)}
+        """
+        formatted_data.append(transcript_info.strip())
     
-    return "\n".join(formatted_data)
+    return "\n\n".join(formatted_data)
 
 def format_alphagenome_data(alphagenome_results: Optional[Dict[str, Any]]) -> str:
     """Format AlphaGenome results for LLM prompt - Fixed for actual result structure."""
@@ -288,7 +316,7 @@ Provide a structured analysis with the following sections. Each section should c
    - Note any important limitations or uncertainties
 
 SCORING INTERPRETATION:
-- SpliceAI/Pangolin scores >0.5 are significant, >0.8 are high confidence
+- SpliceAI/Pangolin scores >0.2 are somewhat significant, >0.5 are significant, >0.8 are high confidence
 - AlphaGenome effect magnitudes >0.1 indicate significant tissue effects
 - AlphaGenome prediction differences show direction and magnitude of variant impact
 - When tools disagree, prioritize: (1) Tool agreement, (2) AlphaGenome multi-modal evidence, (3) Higher confidence scores
@@ -307,7 +335,7 @@ def call_llm(spliceai_results: Dict[Any, Any], gtex_results: Dict[Any, Any],
              alphagenome_results: Optional[Dict[Any, Any]] = None,
              chrom: str = None, pos: int = None, ref: str = None, alt: str = None,
              context: Optional[str] = None,
-             model: str = "gpt-4.1-nano", temperature: float = 0.3) -> Dict[str, Any]:
+             model: str = "gpt-4o", temperature: float = 0.3) -> Dict[str, Any]:
     if not client:
         return {
             "llm_interpretation": "OpenAI client not initialized. Please check your API key.",

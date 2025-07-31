@@ -572,7 +572,7 @@ class ChatSAVPipeline:
                 self.ref, 
                 self.alt, 
                 self.context,
-                model="gpt-4.1-nano"
+                model="gpt-4o"
             )
             self.last_llm_results = llm_results
             self.print_results(llm_results)
