@@ -31,6 +31,7 @@ from callGtex import (
 from callLlm import call_llm
 from chatLLM import ChatLLM
 from createFiles import (
+    add_gtex_results,
     add_splicing_results,
     sanitise_name
 )
@@ -197,10 +198,10 @@ class ChatSAVPipeline:
                         print(f"✓ Output will not be stored")
                     break
                 else:
-                    print(f"{store} is not a valid option, output will not be stored 0\n")
+                    print(f"{store} is not a valid option, output will not be stored \n")
                     break
             except ValueError:
-                print(f"{storeFiles} is not a valid option, output will not be stored 0\n")
+                print(f"{storeFiles} is not a valid option, output will not be stored \n")
                 break
             
 
@@ -483,6 +484,10 @@ class ChatSAVPipeline:
     def get_gtex_results(self) -> None:
         """Get GTEx expression results for the current variant and tissue using selected endpoints."""
         print("\n--- Getting GTEx Results ---")
+        if self.store:
+            buffer = io.StringIO()
+            sys_stdout = sys.stdout
+            sys.stdout = buffer
         
         # Check if we need tissues for the selected endpoints
         needs_tissues = any(ep != "getExons" for ep in self.gtex_endpoints)
@@ -504,6 +509,7 @@ class ChatSAVPipeline:
         print(f"Using GTEx endpoints: {', '.join([self.VALID_GTEX_ENDPOINTS[ep] for ep in self.gtex_endpoints])}")
         
         try:
+
             self.gtex_results = {}
             
             # Process each selected endpoint
@@ -610,8 +616,16 @@ class ChatSAVPipeline:
             
         except Exception as e:
             print(f"Error: Failed to get GTEx results: {e}")
-        
-        self.wait_to_continue()
+        finally:
+            if self.store:
+                sys.stdout = sys_stdout
+                combined_output = buffer.getvalue()
+                buffer.close()   
+                add_gtex_results(self.variant_coord, self.gtex_results)
+                print(combined_output) 
+                print(f"\n✓ GTEx results stored in folder: {self.variant_coord}/GTEx/")
+                
+                self.wait_to_continue()
 
     def gtex_submenu(self) -> None:
         """GTEx analysis submenu."""
