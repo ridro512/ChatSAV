@@ -55,6 +55,15 @@ class ChatSAVPipeline:
         "Whole_Blood"
     }
 
+    VALID_GTEX_ENDPOINTS = {
+        "medianGeneExpression": "Median Gene Expression",
+        "geneExpression": "Gene Expression (with sample data)",
+        "medianExonExpression": "Median Exon Expression", 
+        "medianJunctionExpression": "Median Junction Expression",
+        "topExpressedGenes": "Top Expressed Genes (by tissue)",
+        "getExons": "Get Exons"
+
+    }
     ALPHAGENOME_SEQUENCE_LENGTHS = ["2KB", "16KB", "100KB", "500KB", "1MB"]
     
     def __init__(self):
@@ -73,7 +82,7 @@ class ChatSAVPipeline:
         self.pos: Optional[int] = None
         self.ref: Optional[str] = None
         self.alt: Optional[str] = None
-        self.gtex_endpoint: str = "medianGeneExpression"
+        self.gtex_endpoints: List[str] = ["medianGeneExpression"]
         self.last_llm_results: Optional[Dict[str, Any]] = None
         self.chat_handler = ChatLLM(self)
 
@@ -357,145 +366,183 @@ class ChatSAVPipeline:
 
         self.wait_to_continue()
 
-    def select_gtex_endpoint(self) -> None:
-        """Select which GTEx API endpoint to use."""
-        print("\n--- GTEx API Endpoint Selection ---")
+    def select_gtex_endpoints(self) -> None:
+        """Select which GTEx API endpoints to use (multiple selection)."""
+        print("\n--- GTEx API Endpoints Selection ---")
         print("\nAvailable GTEx endpoints:")
-        print("1. Median Gene Expression (default)")
-        print("2. Gene Expression (with sample data)")
-        print("3. Median Exon Expression")
-        print("4. Median Junction Expression")
-        print("5. Top Expressed Genes (by tissue)")
-        print("6. Get Exons")
         
-        choice = input("\nSelect endpoint (1-6, default=1): ").strip()
+        # Display available endpoints with numbers
+        endpoint_list = list(self.VALID_GTEX_ENDPOINTS.keys())
+        for i, (endpoint_key, endpoint_desc) in enumerate(self.VALID_GTEX_ENDPOINTS.items(), 1):
+            print(f"{i}. {endpoint_desc}")
         
-        endpoint_map = {
-            "1": "medianGeneExpression",
-            "2": "geneExpression",
-            "3": "medianExonExpression",
-            "4": "medianJunctionExpression",
-            "5": "topExpressedGenes",
-            "6": "getExons"
-        }
+        endpoints_input = input(
+            "\nPlease enter the endpoint numbers you wish to use, separated by commas.\n"
+            "Press Enter without typing to default to Median Gene Expression:\n"
+        ).strip()
         
-        if choice in endpoint_map:
-            self.gtex_endpoint = endpoint_map[choice]
-            print(f"✓ GTEx endpoint set to: {self.gtex_endpoint}")
+        if not endpoints_input:
+            # User pressed enter without input - set default
+            self.gtex_endpoints = ["medianGeneExpression"]
+            print("✓ Defaulting to Median Gene Expression")
         else:
-            print("Invalid choice, keeping default: medianGeneExpression")
-        
+            # Parse and validate endpoint selections
+            try:
+                endpoint_numbers = [int(num.strip()) for num in endpoints_input.split(',')]
+                
+                # Validate endpoint numbers
+                invalid_numbers = []
+                valid_endpoints = []
+                
+                for num in endpoint_numbers:
+                    if 1 <= num <= len(endpoint_list):
+                        endpoint_key = endpoint_list[num - 1]
+                        if endpoint_key not in valid_endpoints:  # Avoid duplicates
+                            valid_endpoints.append(endpoint_key)
+                    else:
+                        invalid_numbers.append(num)
+                
+                if invalid_numbers:
+                    print(f"\nWarning: The following endpoint numbers are invalid: {invalid_numbers}")
+                    print(f"Valid numbers are 1-{len(endpoint_list)}")
+                
+                if valid_endpoints:
+                    self.gtex_endpoints = valid_endpoints
+                    endpoint_names = [self.VALID_GTEX_ENDPOINTS[ep] for ep in valid_endpoints]
+                    print(f"\n✓ GTEx endpoints set: {', '.join(endpoint_names)}")
+                else:
+                    print("\nError: No valid endpoint numbers provided. Keeping current selection.")
+                    
+            except ValueError:
+                print("\nError: Please enter valid numbers separated by commas. Keeping current selection.")
+
         self.wait_to_continue()
 
-
     def get_gtex_results(self) -> None:
-        """Get GTEx expression results for the current variant and tissue."""
+        """Get GTEx expression results for the current variant and tissue using selected endpoints."""
         print("\n--- Getting GTEx Results ---")
         
-        if not self.tissues and self.gtex_endpoint != "getExons":
-            print("Error: Please select tissue types first (Option 4)")
+        # Check if we need tissues for the selected endpoints
+        needs_tissues = any(ep != "getExons" for ep in self.gtex_endpoints)
+        if needs_tissues and not self.tissues:
+            print("Error: Please select tissue types first (Option 1 in GTEx submenu)")
             return
         
         if not self.variant_coord:
             print("Error: Please input variant coordinates first (Option 1)")
             return
         
-        if self.gtex_endpoint != "topExpressedGenes" and not self.spliceai_results:
+        # Check if we need SpliceAI results for gene-based endpoints
+        needs_genes = any(ep != "topExpressedGenes" for ep in self.gtex_endpoints)
+        if needs_genes and not self.spliceai_results:
             print("Error: Please get SpliceAI results first (Option 2) to identify the gene")
             return
         
-        print(f"Analyzing expression in {', '.join(self.tissues)} for variant: {self.variant_coord}")
-        print(f"Using GTEx endpoint: {self.gtex_endpoint}")
+        print(f"Analyzing expression in {', '.join(self.tissues) if self.tissues else 'N/A'} for variant: {self.variant_coord}")
+        print(f"Using GTEx endpoints: {', '.join([self.VALID_GTEX_ENDPOINTS[ep] for ep in self.gtex_endpoints])}")
         
         try:
             self.gtex_results = {}
             
-            # Handle topExpressedGenes differently (tissue-based, not gene-based)
-            if self.gtex_endpoint == "topExpressedGenes":
-                for tissue in self.tissues:
-                    print(f"\nQuerying top expressed genes in {tissue}")
-                    result = topExpressedGenes(tissue)
-                    
-                    if 'error' not in result:
-                        self.gtex_results[tissue] = result
-                        print(f"✓ Found {len(result.get('top_genes', []))} top expressed genes")
-                        # Show top 5
-                        for i, gene in enumerate(result.get('top_genes', [])[:5]):
-                            print(f"  {i+1}. {gene['gene_symbol']} - {gene['median_expression']} TPM")
-                    else:
-                        print(f"Error: {result['error']}")
-            else:
-                # Extract GENCODE IDs from SpliceAI results
-                gencode_ids = set()
-                for transcript in self.spliceai_results.get('splice_scores', []):
-                    gene_id = transcript.get('ensembl_id')
-                    if gene_id:
-                        gencode_ids.add(gene_id)
+            # Process each selected endpoint
+            for endpoint in self.gtex_endpoints:
+                print(f"\n{'='*20} Processing {self.VALID_GTEX_ENDPOINTS[endpoint]} {'='*20}")
                 
-                if not gencode_ids:
-                    print("Error: No GENCODE IDs found in SpliceAI results")
-                    return
+                endpoint_results = {}
                 
-                # Get GTEx results for each gene
-                for gencode_id in gencode_ids:
-                    print(f"\nQuerying GTEx for gene: {gencode_id}")
+                # Handle topExpressedGenes differently (tissue-based, not gene-based)
+                if endpoint == "topExpressedGenes":
+                    for tissue in self.tissues:
+                        print(f"\nQuerying top expressed genes in {tissue}")
+                        result = topExpressedGenes(tissue)
+                        
+                        if 'error' not in result:
+                            endpoint_results[tissue] = result
+                            print(f"✓ Found {len(result.get('top_genes', []))} top expressed genes")
+                            # Show top 5
+                            for i, gene in enumerate(result.get('top_genes', [])[:5]):
+                                print(f"  {i+1}. {gene['gene_symbol']} - {gene['median_expression']} TPM")
+                        else:
+                            print(f"Error: {result['error']}")
+                
+                else:
+                    # Extract GENCODE IDs from SpliceAI results for gene-based endpoints
+                    gencode_ids = set()
+                    if endpoint != "getExons" or self.spliceai_results:
+                        for transcript in self.spliceai_results.get('splice_scores', []):
+                            gene_id = transcript.get('ensembl_id')
+                            if gene_id:
+                                gencode_ids.add(gene_id)
                     
-                    # Call appropriate endpoint
-                    if self.gtex_endpoint == "medianGeneExpression":
-                        result = medianGeneExpression(gencode_id, self.tissues)
-                    elif self.gtex_endpoint == "geneExpression":
-                        result = geneExpression(gencode_id, self.tissues)
-                    elif self.gtex_endpoint == "medianExonExpression":
-                        result = medianExonExpression(gencode_id, self.tissues)
-                    elif self.gtex_endpoint == "medianJunctionExpression":
-                        result = medianJunctionExpression(gencode_id, self.tissues)
-                    elif self.gtex_endpoint == "getExons":
-                        result = getExons(gencode_id)
+                    if not gencode_ids and endpoint != "getExons":
+                        print(f"Error: No GENCODE IDs found in SpliceAI results for {endpoint}")
+                        continue
                     
-                    if 'error' not in result:
-                        self.gtex_results[gencode_id] = result
+                    # Get GTEx results for each gene
+                    for gencode_id in gencode_ids:
+                        print(f"\nQuerying GTEx {endpoint} for gene: {gencode_id}")
                         
-                        # Display results based on endpoint
-                        print(f"\n✓ GTEx Results for {gencode_id}:")
-                        print("=" * 50)
+                        # Call appropriate endpoint
+                        if endpoint == "medianGeneExpression":
+                            result = medianGeneExpression(gencode_id, self.tissues)
+                        elif endpoint == "geneExpression":
+                            result = geneExpression(gencode_id, self.tissues)
+                        elif endpoint == "medianExonExpression":
+                            result = medianExonExpression(gencode_id, self.tissues)
+                        elif endpoint == "medianJunctionExpression":
+                            result = medianJunctionExpression(gencode_id, self.tissues)
+                        elif endpoint == "getExons":
+                            result = getExons(gencode_id)
                         
-                        if self.gtex_endpoint == "medianGeneExpression":
-                            for tissue, data in result.get('expression_data', {}).items():
-                                print(f"\nTissue: {tissue}")
-                                print(f"  Median TPM: {data.get('median_tpm', 'N/A')}")
-                                print(f"  Expressed: {data.get('expressed', 'N/A')}")
-                                print(f"  Expression Level: {data.get('expression_level', 'N/A')}")
-                        
-                        elif self.gtex_endpoint == "geneExpression":
-                            for tissue, data in result.get('expression_data', {}).items():
-                                print(f"\nTissue: {tissue}")
-                                print(f"  Sample count: {len(data.get('data', []))}")
-                                print(f"  Gene symbol: {data.get('gene_symbol', 'N/A')}")
-                        
-                        elif self.gtex_endpoint == "medianExonExpression":
-                            for tissue, data in result.get('exon_data', {}).items():
-                                print(f"\nTissue: {tissue}")
-                                print(f"  Exon count: {data.get('exon_count', 0)}")
-                                # Show first few exons
-                                for exon in data.get('exons', [])[:3]:
-                                    print(f"  - {exon['exon_id']}: {exon['median_expression']}")
-                        
-                        elif self.gtex_endpoint == "medianJunctionExpression":
-                            for tissue, data in result.get('junction_data', {}).items():
-                                print(f"\nTissue: {tissue}")
-                                print(f"  Junction count: {data.get('junction_count', 0)}")
-                        elif self.gtex_endpoint == "getExons":
-                            print(f"  Total exons: {result.get('exon_count', 0)}")
-                            for i, exon in enumerate(result.get('exons', [])[:5]):  # Show first 5
-                                exon_num = exon.get('exon_number', i+1)
-                                start = exon.get('start', 'N/A')
-                                end = exon.get('end', 'N/A')
-                                length = exon.get('length', 'N/A')
-                                print(f"  - Exon {exon_num}: {start}-{end} ({length} bp)")
-                            if result.get('exon_count', 0) > 5:
-                                print(f"  ... and {result.get('exon_count') - 5} more exons")
-                    else:
-                        print(f"Error getting GTEx data: {result['error']}")
+                        if 'error' not in result:
+                            endpoint_results[gencode_id] = result
+                            
+                            # Display results based on endpoint
+                            print(f"\n✓ GTEx Results for {gencode_id}:")
+                            print("=" * 50)
+                            
+                            if endpoint == "medianGeneExpression":
+                                for tissue, data in result.get('expression_data', {}).items():
+                                    print(f"\nTissue: {tissue}")
+                                    print(f"  Median TPM: {data.get('median_tpm', 'N/A')}")
+                                    print(f"  Expressed: {data.get('expressed', 'N/A')}")
+                                    print(f"  Expression Level: {data.get('expression_level', 'N/A')}")
+                            
+                            elif endpoint == "geneExpression":
+                                for tissue, data in result.get('expression_data', {}).items():
+                                    print(f"\nTissue: {tissue}")
+                                    print(f"  Sample count: {len(data.get('data', []))}")
+                                    print(f"  Gene symbol: {data.get('gene_symbol', 'N/A')}")
+                            
+                            elif endpoint == "medianExonExpression":
+                                for tissue, data in result.get('exon_data', {}).items():
+                                    print(f"\nTissue: {tissue}")
+                                    print(f"  Exon count: {data.get('exon_count', 0)}")
+                                    # Show first few exons
+                                    for exon in data.get('exons', [])[:3]:
+                                        print(f"  - {exon['exon_id']}: {exon['median_expression']}")
+                            
+                            elif endpoint == "medianJunctionExpression":
+                                for tissue, data in result.get('junction_data', {}).items():
+                                    print(f"\nTissue: {tissue}")
+                                    print(f"  Junction count: {data.get('junction_count', 0)}")
+                            
+                            elif endpoint == "getExons":
+                                print(f"  Total exons: {result.get('exon_count', 0)}")
+                                for i, exon in enumerate(result.get('exons', [])[:5]):  # Show first 5
+                                    exon_num = exon.get('exon_number', i+1)
+                                    start = exon.get('start', 'N/A')
+                                    end = exon.get('end', 'N/A')
+                                    length = exon.get('length', 'N/A')
+                                    print(f"  - Exon {exon_num}: {start}-{end} ({length} bp)")
+                                if result.get('exon_count', 0) > 5:
+                                    print(f"  ... and {result.get('exon_count') - 5} more exons")
+                        else:
+                            print(f"Error getting GTEx data: {result['error']}")
+                
+                # Store results for this endpoint
+                if endpoint_results:
+                    self.gtex_results[endpoint] = endpoint_results
             
         except Exception as e:
             print(f"Error: Failed to get GTEx results: {e}")
@@ -514,11 +561,16 @@ class ChatSAVPipeline:
                 print(f"Current tissues: {', '.join(self.tissues)}")
             else:
                 print("Current tissues: None selected")
-            print(f"Current endpoint: {self.gtex_endpoint}")
+            
+            if self.gtex_endpoints:
+                endpoint_names = [self.VALID_GTEX_ENDPOINTS[ep] for ep in self.gtex_endpoints]
+                print(f"Current endpoints: {', '.join(endpoint_names)}")
+            else:
+                print("Current endpoints: None selected")
             
             print("\nOptions:")
             print("1. Select tissue types")
-            print("2. Select GTEx endpoint")
+            print("2. Select GTEx endpoints")
             print("3. Get GTEx results")
             print("0. Return to main menu")
             print("-" * 60)
@@ -528,14 +580,13 @@ class ChatSAVPipeline:
             if choice == "1":
                 self.select_tissue_type()
             elif choice == "2":
-                self.select_gtex_endpoint()
+                self.select_gtex_endpoints()  # Updated method name
             elif choice == "3":
                 self.get_gtex_results()
             elif choice == "0":
                 break
             else:
                 print("Invalid choice. Please select a number from 0-3.")
-
 
     def input_context(self) -> None:
         "Provide context to the LLM to tweak query/output"
@@ -916,8 +967,8 @@ class ChatSAVPipeline:
         print("1. Input variant coordinates")
         print("2. SpliceAI and Pangolin ")
         print("3. GTEx")
-        print("4. LLM")
-        print("5. AlphaGenome")
+        print("4. AlphaGenome")
+        print("5. LLM")
         print("0. Exit")
         print("-" * 60)
         
@@ -937,9 +988,9 @@ class ChatSAVPipeline:
                     case "3":
                         self.gtex_submenu()
                     case "4":
-                        self.llm_submenu()
-                    case "5":
                         self.alphagenome_submenu()
+                    case "5":
+                        self.llm_submenu()
                     case "0":
                         print("\nThank you for using ChatSAV!")
                         break
