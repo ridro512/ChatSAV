@@ -1,0 +1,53 @@
+
+in chatSAV.py
+
+have an option dicting if they wanna store it in the current directory?
+if they dont continue
+if they do
+call 
+createFiles.py
+where it makes a directory (Variant Name) if not already there
+where it makes a folder for each tool
+splicingPredictions (SpliceAi and Pangolin), gTEx (Tissues -> endpoint) (for every endpoint chosen), AlphaGenome (Just everything in one file named by the sequence length).
+
+
+def createparentfolder(variant):
+    create directory "variant"
+
+def createGTEx folder(variant):
+    cd to {variant}
+    create folder "Gtex"
+
+def checkparentfodler:
+    if ({variant coordinate} in *) {
+        return True
+    }
+    return false
+
+def checkGTExFolder:
+    if ("GTEx" in *) {
+        return True
+    }
+    return false
+
+def addSpliceResults(variant, stdout):
+
+    if checkparentfolder(variant) = false {
+        createParentFolder(variant name)
+    }
+    cd variant
+    if (!SplcicingScores) {
+        create SplicingScores.txt
+        cp in output or directly copy in
+    } 
+    add results
+
+def addGTEx results(variant, tissue, endpoint, stdout):
+    if cpf = flase (create)
+    cd varaint
+    if gtexfolder = false(create)
+    cd GTEx
+    if tissuefodler doesnt exists within gtex folder
+    add tissue folder
+    cd tissue folder
+    cp stdout to endpoint.txt

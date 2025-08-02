@@ -12,6 +12,9 @@ VARIANT FORMAT INFORMATION:
 - Alternate allele: alt
 """
 
+import io
+import os
+import sys
 from typing import Tuple, Dict, Any, Optional, List
 
 from callSplice import call_splice
@@ -27,7 +30,10 @@ from callGtex import (
 )
 from callLlm import call_llm
 from chatLLM import ChatLLM
-
+from createFiles import (
+    add_splicing_results,
+    sanitise_name
+)
 
 class ChatSAVPipeline:
     """Main pipeline class for ChatSAV analysis."""
@@ -68,9 +74,10 @@ class ChatSAVPipeline:
     
     def __init__(self):
         self.variant_coord: Optional[str] = None
-        self.hg: Optional[str] = 38
+        self.hg: Optional[int] = 38
         self.distance: int = 50
         self.mask: int = 0
+        self.store: bool = False
         self.tissues: Optional[List[str]] = []
         self.spliceai_results: Optional[Dict[str, Any]] = None
         self.pangolin_results: Optional[Dict[str, Any]] = None
@@ -174,12 +181,39 @@ class ChatSAVPipeline:
             except ValueError:
                 print(f"{mask} is not a valid option, defaulting to raw scores 0\n")
                 break
+        
+        while True:
+            storeFiles = input(
+                "(Optional) Please enter if you would like to store your output in the current directory (1) or only view them in this session (0) (default: 0)\n"
+            ).strip()
+
+            try:
+                store = int(storeFiles)
+                if store in [0,1]:
+                    self.store = bool(store)
+                    if store == 1:
+                        print(f"✓ Output set to be stored in current directory")
+                    if store == 0:
+                        print(f"✓ Output will not be stored")
+                    break
+                else:
+                    print(f"{store} is not a valid option, output will not be stored 0\n")
+                    break
+            except ValueError:
+                print(f"{storeFiles} is not a valid option, output will not be stored 0\n")
+                break
+            
 
         self.wait_for_user()
 
     def get_splice_results(self) -> None:
         """Get SpliceAI results for the current variant."""
         print("\n--- Getting SpliceAI Results ---")
+
+        if self.store:
+            buffer = io.StringIO()
+            sys_stdout = sys.stdout
+            sys.stdout = buffer
         
         if not self.variant_coord or not self.hg:
             print("Error: Please input variant coordinates first (Option 1)")
@@ -313,6 +347,18 @@ class ChatSAVPipeline:
                 
         except Exception as e:
             print(f"Error: Failed to get Pangolin results: {e}")
+
+        finally:
+            if self.store:
+                sys.stdout = sys_stdout
+                combined_output = buffer.getvalue()
+                buffer.close()
+
+                add_splicing_results(self.variant_coord, combined_output)
+                filepath = os.path.join(sanitise_name(self.variant_coord), "splicing_results.txt")
+                print(f"\n✓ Splicing results stored in folder: {self.variant_coord}/splicing_results.txt")
+                with open(filepath, 'r') as f:
+                    print(f.read())
     
         self.wait_for_user()
 
