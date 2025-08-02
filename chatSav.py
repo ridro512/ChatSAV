@@ -417,6 +417,22 @@ class ChatSAVPipeline:
                 print("\nError: Please enter valid numbers separated by commas. Keeping current selection.")
 
         self.wait_to_continue()
+    
+    def get_matching_gencode_id_from_spliceai(self, spliceai_id: str, tissues: List[str]) -> str:
+        """
+        Loop downward from SpliceAI output to find an older GTEx compatible version.
+        """
+        base_id, version_str = spliceai_id.split('.')
+        version = int(version_str)
+
+        for v in range(version, 0, -1):
+            test_id = f"{base_id}.{v}"
+            result = medianGeneExpression(test_id, tissues)
+
+            if result.get("expression_data"):
+                return test_id
+
+        return "Failed (Placeholder)"
 
     def get_gtex_results(self) -> None:
         """Get GTEx expression results for the current variant and tissue using selected endpoints."""
@@ -480,25 +496,27 @@ class ChatSAVPipeline:
                     
                     # Get GTEx results for each gene
                     for gencode_id in gencode_ids:
-                        print(f"\nQuerying GTEx {endpoint} for gene: {gencode_id}")
+                        resolved_id = self.get_matching_gencode_id_from_spliceai(gencode_id, self.tissues)
+                        print(f"\nQuerying GTEx {endpoint} for resolved gene: {resolved_id}")
+                        # print(f"\nQuerying GTEx {endpoint} for gene: {gencode_id}")
                         
                         # Call appropriate endpoint
                         if endpoint == "medianGeneExpression":
-                            result = medianGeneExpression(gencode_id, self.tissues)
+                            result = medianGeneExpression(resolved_id, self.tissues)
                         elif endpoint == "geneExpression":
-                            result = geneExpression(gencode_id, self.tissues)
+                            result = geneExpression(resolved_id, self.tissues)
                         elif endpoint == "medianExonExpression":
-                            result = medianExonExpression(gencode_id, self.tissues)
+                            result = medianExonExpression(resolved_id, self.tissues)
                         elif endpoint == "medianJunctionExpression":
-                            result = medianJunctionExpression(gencode_id, self.tissues)
+                            result = medianJunctionExpression(resolved_id, self.tissues)
                         elif endpoint == "getExons":
-                            result = getExons(gencode_id)
+                            result = getExons(resolved_id)
                         
                         if 'error' not in result:
-                            endpoint_results[gencode_id] = result
+                            endpoint_results[resolved_id] = result
                             
                             # Display results based on endpoint
-                            print(f"\n✓ GTEx Results for {gencode_id}:")
+                            print(f"\n✓ GTEx Results for {resolved_id}:")
                             print("=" * 50)
                             
                             if endpoint == "medianGeneExpression":
