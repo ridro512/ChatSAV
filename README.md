@@ -28,12 +28,28 @@ Credits/Copyright: Dao M, Venkateswaran G, Rogers C, Zhao K
      pip install alphagenome
      ``` 
      > *Note: AlphaGenome requires Python ≥ 3.10*
+     
+2. **Set up API keys**
 
-2. **Make the script executable**
+   Before running the program, make sure to set your API keys as environment variables:
+
+   - **Windows:**
+     ```powershell
+     $env:OPENAI_API_KEY="your-openai-key"
+     $env:ALPHA_GENOME_API_KEY="your-alphagenome-key"
+     ```
+
+   - **macOS / Linux:**
+     ```bash
+     export OPENAI_API_KEY="your-openai-key"
+     export ALPHA_GENOME_API_KEY="your-alphagenome-key"
+     ```
+
+3. **Make the script executable**
 
    ```bash
    chmod +x chatSav.py
-**More comprehensive instructions are under requirements.txt**
+
 # Usage
 Input: Coordinates of a variant (chr:pos:ref:alt format)
 
