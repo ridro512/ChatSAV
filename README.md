@@ -3,21 +3,37 @@
 # ChatSAV
 LLM-Powered Assistant for Evaluating Candidate Disease-Causing Splice-Altering Variants
 
-Genetic variants that disrupt pre-mRNA splicing (splice-altering variants or SAVs) are a frequent cause of genetic diseases, but most go undetected. The diagnostic process for SAVs begins with computational tools which score a patient’s millions of genetic variants to identify a manageable shortlist of candidate SAVs. Next, an analyst must manually evaluate each candidate to determine whether it warrants follow-up via an in vitro assay- a low throughput and costly process necessary for patient diagnosis. This investigation requires the analyst to assess:
+Genetic variants that disrupt pre-mRNA splicing (splice-altering variants or SAVs) are a major but underdiagnosed cause of genetic disease. The current diagnostic workflow is slow, manual, and highly expert-driven, requiring analysts to gather scattered data to interpret and assess experimental feasibility for each candidate variant.
 
-The likelihood of disruption to splicing based on prediction scores
-The likely impact at the mRNA and protein levels
-Whether the predicted disruption matches the patient’s phenotype
-Feasibility of in vitro testing methods (e.g. minigene or RT-PCR)
-Tissue-specific expression of the gene and splice isoforms
-Although much of this information is readily available, the analyst’s task is time-consuming and requires extensive domain expertise. Many researchers do not pursue candidate SAVs due to a lack of confidence navigating this complex analysis process, which we believe is highly amenable to assistance via a Large Language Model (LLM) agent. 
+Our mission is to make this workflow more streamlined using OpenAI's LLM. We have integrated several API's to assist variant curators in more efficiently and accurately predicting potential SAV's. These tools include:
 
-The proposed project is to build a software tool in which an LLM receives a query genetic variant, gathers relevant data using existing APIs and datasets, and provides recommendations. The system would guide users through SAV evaluation, helping reduce the expertise barrier and streamline the diagnostic process. This project would enable students to gain significant experience with a rapidly emerging and important technology: developing LLM agentic systems.
+- SpliceAI/Pangolin: Splicing prediction scores
+- GTEx: Tissue specific expression and isoform data
+- Google's AlphaGenome: Predicts mRNA and protein sequence changes
+
 Credits/Copyright: Dao M, Venkateswaran G, Rogers C, Zhao K
+## Installation
 
-# Installation
-The required packages are OpenAI API, (pip install openai).
-Ensure the file chatSav.py is executable and run using ./chatSav.py
+1. **Install dependencies**
+
+   You'll need the following Python packages:
+
+   - [`openai`](https://pypi.org/project/openai/):
+     ```bash
+     pip install openai
+     ```
+
+   - [`alphagenome`](https://pypi.org/project/alphagenome/):
+     ```bash
+     pip install alphagenome
+     ``` 
+     > *Note: AlphaGenome requires Python ≥ 3.10*
+
+2. **Make the script executable**
+
+   ```bash
+   chmod +x chatSav.py
+**More comprehensive instructions are under requirements.txt**
 # Usage
 Input: Coordinates of a variant (chr:pos:ref:alt format)
 
