@@ -31,6 +31,7 @@ from callGtex import (
 from callLlm import call_llm
 from chatLLM import ChatLLM
 from createFiles import (
+    add_alphagenome_results,
     add_gtex_results,
     add_splicing_results,
     sanitise_name
@@ -799,6 +800,11 @@ class ChatSAVPipeline:
     def get_alphagenome_results(self) -> None:
         """Get AlphaGenome variant effect predictions."""
         print("\n--- Getting AlphaGenome Results ---")
+
+        if self.store:
+            buffer = io.StringIO()
+            sys_stdout = sys.stdout
+            sys.stdout = buffer
         
         if not self.variant_coord or not self.hg:
             print("Error: Please input variant coordinates first (Option 1)")
@@ -973,6 +979,18 @@ class ChatSAVPipeline:
             print("Also ensure AlphaGenome is installed: pip install alphagenome")
         except Exception as e:
             print(f"Error: Failed to get AlphaGenome results: {e}")
+        finally:
+            if self.store:
+                sys.stdout = sys_stdout
+                combined_output = buffer.getvalue()
+                buffer.close()
+
+                # Save AlphaGenome output
+                add_alphagenome_results(self.variant_coord, self.alphagenome_sequence_length, combined_output)
+                filepath = os.path.join(sanitise_name(self.variant_coord), "AlphaGenome", f"{self.alphagenome_sequence_length}.txt")
+                print(f"\n✓ AlphaGenome results stored in folder: {self.variant_coord}/AlphaGenome/{self.alphagenome_sequence_length}.txt")
+                with open(filepath, 'r') as f:
+                    print(f.read())
         
         self.wait_for_user()
 
