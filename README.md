@@ -50,12 +50,43 @@ Credits/Copyright: Dao M, Venkateswaran G, Rogers C, Zhao K
    ```bash
    chmod +x chatSav.py
 
-# Usage
-Input: Coordinates of a variant (chr:pos:ref:alt format)
+## Usage
 
-VARIANT FORMAT INFORMATION:
-- Chromosome: chr
-- Position: pos
-- Reference allele: ref
-- Alternate allele: alt
+ChatSAV supports the following functionality:
 
+### 1. Input Variant
+
+- **Format**: `chr:pos:ref:alt` (e.g. `chr1:123456:A:G`)
+- **Genome build**: Choose `hg38` or `hg19` (default: `hg38`)
+- **Distance**: Window size for SpliceAI/Pangolin (default: `50`)
+- **Score type**: Raw or masked (default: `Raw`)
+- **Storage**: Option to save results locally
+
+### 2. SpliceAI & Pangolin
+
+- Generates prediction scores from both tools for the variant
+
+### 3. GTEx Integration
+
+- Supports selection of **multiple endpoints** and **multiple tissues** per query.
+- Available endpoints include:
+  - Median Gene Expression
+  - Gene Expression with sample data
+  - Median Exon Expression
+  - Median Junction Expression
+  - Top Expressed Genes (by tissue)
+  - Exon retrieval by gene
+
+- Supports **56 GTEx tissues**
+
+### 4. AlphaGenome
+
+- Predicts transcript and protein sequences across multiple sequence lengths:
+  - **2KB** – Fastest; good for quick tests/debugging
+  - **16KB** – Balanced; captures nearby regulatory elements
+  - **100KB** – Default; comprehensive analysis
+  - **500KB** – In-depth; long-range regulatory coverage
+  - **1MB** – Most complete; for high-confidence research
+
+> *AlphaGenome performs best with GRCh38/hg38. Accuracy may be reduced on GRCh37/hg19.*  
+> *Start with 100KB for standard use; use 2KB for testing and 500KB+ for critical variants.*
