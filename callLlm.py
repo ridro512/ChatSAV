@@ -333,7 +333,7 @@ def call_llm(spliceai_results: Dict[Any, Any], gtex_results: Dict[Any, Any],
              alphagenome_results: Optional[Dict[Any, Any]] = None,
              chrom: str = None, pos: int = None, ref: str = None, alt: str = None,
              context: Optional[str] = None,
-             model: str = "gpt-4o", temperature: float = 0.3) -> Dict[str, Any]:
+             model: str = "o4-mini", temperature: float = 1) -> Dict[str, Any]:
     if not client:
         return {
             "llm_interpretation": "OpenAI client not initialized. Please check your API key.",
@@ -386,7 +386,7 @@ Avoid redundancy and focus on the most relevant findings that inform clinical de
                     "content": prompt
                 }
             ],
-            max_tokens=1200,
+            max_completion_tokens=2400,
             temperature=temperature
         )
         # extract text response

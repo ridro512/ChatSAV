@@ -18,7 +18,7 @@ class ChatLLM:
         self.pipeline = pipeline_instance
         self.conversation_history: List[Dict[str, str]] = []
         self.max_history_length = 5
-        self.max_response_tokens = 300
+        self.max_response_tokens = 2000
         self.llm_analysis_results = None
     
     def start_chat(self) -> None:
@@ -107,7 +107,7 @@ class ChatLLM:
                 self.pipeline.ref, 
                 self.pipeline.alt, 
                 self.pipeline.context,
-                model="gpt-4o"
+                model="o4-mini"
             )
             print("✓ Multi-tool analysis generated for chat context")
         except Exception as e:
@@ -629,13 +629,13 @@ Please provide a helpful response based on the available multi-tool information 
             
             # call OpenAI
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model="o4-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": full_prompt}
                 ],
-                max_tokens=self.max_response_tokens,
-                temperature=0.3
+                max_completion_tokens=self.max_response_tokens,
+                temperature=1
             )
             
             return response.choices[0].message.content.strip()

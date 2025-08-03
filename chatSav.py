@@ -702,7 +702,7 @@ class ChatSAVPipeline:
                 self.ref, 
                 self.alt, 
                 self.context,
-                model="gpt-4o"
+                model="o4-mini"
             )
             self.last_llm_results = llm_results
             self.print_results(llm_results)
