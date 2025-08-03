@@ -74,7 +74,7 @@ def add_gtex_results(variant_coord, gtex_results):
                     f.write(new_entry)
 
 def add_alphagenome_results(variant_coord, sequence_length, alpha_stdout):
-    """Store AlphaGenome results in its own folder"""
+    """Store AlphaGenome results in its own directory"""
     variant_folder = create_variant_folder(variant_coord)
     ag_folder = os.path.join(variant_folder, "AlphaGenome")
     os.makedirs(ag_folder, exist_ok=True)
