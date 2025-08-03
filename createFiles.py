@@ -1,6 +1,5 @@
 import os
 import re
-import hashlib
 
 def sanitise_name(name):
     """Sanitise folder/file names by replacing unsafe characters with underscores."""
@@ -73,3 +72,13 @@ def add_gtex_results(variant_coord, gtex_results):
                     if existing_content and not existing_content.endswith("\n"):
                         f.write("\n") 
                     f.write(new_entry)
+
+def add_alphagenome_results(variant_coord, sequence_length, alpha_stdout):
+    """Store AlphaGenome results in variant_folder/AlphaGenome/sequence_length.txt"""
+    variant_folder = create_variant_folder(variant_coord)
+    ag_folder = os.path.join(variant_folder, "AlphaGenome")
+    os.makedirs(ag_folder, exist_ok=True)
+
+    file_path = os.path.join(ag_folder, f"{sequence_length}.txt")
+    with open(file_path, "w") as f:
+        f.write(alpha_stdout)
