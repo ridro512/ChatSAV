@@ -538,7 +538,7 @@ class ChatLLM:
                             top_genes = scorer_result.get('top_affected_genes', [])
                             if top_genes:
                                 context_parts.append(f"- {output_type} top affected genes:")
-                                for gene in top_genes[:3]:
+                                for gene in top_genes[:3]:  # Top 3
                                     context_parts.append(
                                         f"  * {gene.get('gene_name')}: effect = {gene.get('max_abs_score', 0):.4f}"
                                     )
