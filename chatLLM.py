@@ -185,7 +185,6 @@ class ChatLLM:
         self.analyze_tool_agreement()
     
     def get_alphagenome_summary(self) -> str:
-        """Get a summary of AlphaGenome predictions - Fixed for actual result structure."""
         if not self.pipeline.alphagenome_results:
             return "No data"
         
@@ -203,27 +202,33 @@ class ChatLLM:
         total_output_types = len(predictions)
         significant_effects = 0
         max_effect_magnitude = 0.0
+        total_genes = 0
         
         # Analyze prediction differences for effect magnitude
         for output_type, pred_data in predictions.items():
             pred_diff = pred_data.get('prediction_diff', {})
             if pred_diff:
                 effect_mag = pred_diff.get('effect_magnitude', 0)
-                if effect_mag > 0.1:  # Threshold for significance
+                if effect_mag > 0.0001:
                     significant_effects += 1
                 max_effect_magnitude = max(max_effect_magnitude, effect_mag)
         
-        # Get gene count from variant scores - FIXED SECTION
-        total_genes = 0
         for output_type, scores_list in variant_scores.items():
-            # scores_list is a LIST, need to iterate through it
-            if scores_list:  # Check if list has items
-                for score_data in scores_list:
-                    if 'error' not in score_data:
-                        gene_count = score_data.get('total_genes', 0)
+            if isinstance(scores_list, list):
+                for scorer_result in scores_list:
+                    if isinstance(scorer_result, dict) and 'error' not in scorer_result:
+                        gene_count = scorer_result.get('total_genes', 0)
                         total_genes = max(total_genes, gene_count)
+                        
+                        summary_stats = scorer_result.get('summary_stats', {})
+                        if summary_stats and 'significant_scores' in summary_stats:
+                            sig_count = summary_stats.get('significant_scores', 0)
+                            significant_effects += int(sig_count)
+                        if summary_stats and 'max_score' in summary_stats:
+                            max_abs_score = abs(summary_stats.get('max_score', 0))
+                            max_effect_magnitude = max(max_effect_magnitude, max_abs_score)
         
-        return f"{seq_length} analysis, {total_output_types} output types, {significant_effects} significant effects (max: {max_effect_magnitude:.3f}), {total_genes} genes"
+        return f"{seq_length} analysis, {total_output_types} output types, {significant_effects} significant effects (max: {max_effect_magnitude:.4f}), {total_genes} genes"
     
     def get_gtex_summary(self) -> str:
         """Get a summary of GTEx expression data."""
@@ -277,29 +282,28 @@ class ChatLLM:
                 print("AlphaGenome provides multi-modal evidence (expression + chromatin + splicing)")
     
     def get_max_alphagenome_effect(self) -> float:
-        """Get the maximum effect magnitude from AlphaGenome predictions."""
         if not self.pipeline.alphagenome_results:
             return 0.0
         
         max_effect = 0.0
-        predictions = self.pipeline.alphagenome_results.get('predictions', {})
         
+        # Check prediction differences
+        predictions = self.pipeline.alphagenome_results.get('predictions', {})
         for output_type, pred_data in predictions.items():
             pred_diff = pred_data.get('prediction_diff', {})
             if pred_diff:
                 effect_mag = pred_diff.get('effect_magnitude', 0)
                 max_effect = max(max_effect, effect_mag)
         
-        # Also check variant scores - FIXED SECTION
         variant_scores = self.pipeline.alphagenome_results.get('variant_scores', {})
         for output_type, scores_list in variant_scores.items():
-            # scores_list is a LIST, need to iterate through it
-            if scores_list:  # Check if list has items
-                for score_data in scores_list:
-                    if 'error' not in score_data:
-                        summary_stats = score_data.get('summary_stats', {})
-                        max_score = abs(summary_stats.get('max_score', 0))
-                        max_effect = max(max_effect, max_score)
+            if isinstance(scores_list, list):
+                for scorer_result in scores_list:
+                    if isinstance(scorer_result, dict) and 'error' not in scorer_result:
+                        summary_stats = scorer_result.get('summary_stats', {})
+                        if summary_stats and 'max_score' in summary_stats:
+                            max_abs_score = abs(summary_stats.get('max_score', 0))
+                            max_effect = max(max_effect, max_abs_score)
         
         return max_effect
     
