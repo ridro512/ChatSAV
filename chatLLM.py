@@ -514,7 +514,7 @@ class ChatLLM:
                     f"SG={transcript.get('DS_SG')}, SL={transcript.get('DS_SL')}"
                 )
         
-        # add AlphaGenome results if available - Updated for actual structure
+        # add AlphaGenome results if available
         if self.pipeline.alphagenome_results:
             context_parts.append("\nALPHAGENOME RESULTS:")
             context_parts.append(f"- Sequence Length: {self.pipeline.alphagenome_results.get('sequence_length', 'Unknown')}")
@@ -531,15 +531,18 @@ class ChatLLM:
             
             # Top affected genes from variant scores
             variant_scores = self.pipeline.alphagenome_results.get('variant_scores', {})
-            for output_type, score_data in variant_scores.items():
-                if 'error' not in score_data:
-                    top_genes = score_data.get('top_affected_genes', [])
-                    if top_genes:
-                        context_parts.append(f"- {output_type} top affected genes:")
-                        for gene in top_genes[:3]:  # Top 3
-                            context_parts.append(
-                                f"  * {gene.get('gene_name')}: effect = {gene.get('max_abs_score', 0):.4f}"
-                            )
+            for output_type, scores_list in variant_scores.items():
+                if isinstance(scores_list, list):
+                    for scorer_result in scores_list:
+                        if isinstance(scorer_result, dict) and 'error' not in scorer_result:
+                            top_genes = scorer_result.get('top_affected_genes', [])
+                            if top_genes:
+                                context_parts.append(f"- {output_type} top affected genes:")
+                                for gene in top_genes[:3]:
+                                    context_parts.append(
+                                        f"  * {gene.get('gene_name')}: effect = {gene.get('max_abs_score', 0):.4f}"
+                                    )
+                                break
         
         # add GTEx results if available
         if self.pipeline.gtex_results:
