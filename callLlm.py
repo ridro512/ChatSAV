@@ -247,80 +247,76 @@ USER CONTEXT:
 Please consider this context when providing your analysis.
 """
         
-    prompt = f"""You are an expert genetic analyst specializing in splice-altering variants (SAVs). 
-Please analyze the following genetic variant using multiple prediction tools and provide a focused, concise evaluation for laboratory follow-up.
+    prompt = f"""
+You are an expert in splice-altering variant (SAV) analysis. Analyze the variant below using SpliceAI, Pangolin, AlphaGenome, and GTEx data. Your goal is to provide concise, actionable insights for lab follow-up, with clear justification for each conclusion.
 
-CONSTRAINTS:
-- Provide ONLY the most relevant and accurate analysis
-- Focus on the most significant findings across all prediction tools
-- Give ONE clear recommendation per section, not multiple options
-- Be specific and actionable in your recommendations
-- Limit responses to essential information only
-- For experimental recommendations, suggest only the SINGLE most important/relevant test
-- When tools disagree, explain which prediction is more reliable and why
+CORE DIRECTIVES:
+- Focus on the most informative findings across all tools
+- Provide a brief explanation for each conclusion (explain why it is most likely)
+- When tools disagree, explain which is most reliable and why
+- Give ONE clear recommendation per section (no lists or alternatives)
+- Suggest only the most critical test for validation, based on strongest evidence
+- Limit responses to essential information only (2–4 sentences per section)
 
-VARIANT INFORMATION:
+VARIANT DETAILS:
+- Variant: {chrom}:{pos}:{ref}:{alt}
 - Chromosome: {chrom}
 - Position: {pos}
 - Reference allele: {ref}
 - Alternative allele: {alt}
-- Variant notation: {chrom}:{pos}:{ref}:{alt}
 
-SPLICEAI PREDICTION DATA:
+TOOL OUTPUTS:
+SPLICEAI:
 {transcript_data}
 
-PANGOLIN PREDICTION DATA:
+PANGOLIN:
 {pangolin_data}
 
-ALPHAGENOME PREDICTION DATA:
+ALPHAGENOME:
 {alphagenome_data}
 
-GTEX EXPRESSION DATA:
+GTEx EXPRESSION DATA:
 {json.dumps(gtex_results, indent=2)}
 {context_section}
 
-ANALYSIS FRAMEWORK:
-Provide a structured analysis with the following sections. Each section should contain ONLY the most relevant point:
+STRUCTURED ANALYSIS:
 
-1. COMPARATIVE SPLICE IMPACT ANALYSIS:
-   - Compare SpliceAI, Pangolin, and AlphaGenome predictions
-   - Identify the most reliable prediction and explain why - usually AlphaGenome unless it is not consistent among the transcripts
-   - State the consensus prediction or highlight key disagreements
-   - Focus on the transcript/gene with strongest evidence
+1. COMPARATIVE SPLICE IMPACT:
+   - Compare predictions across SpliceAI, Pangolin, and AlphaGenome
+   - Identify the most reliable tool or prediction, and explain why (e.g., transcript consistency, score strength, expression support)
+   - State consensus or key disagreement and justify the interpretation
 
-2. MULTI-MODAL EVIDENCE INTEGRATION:
+2. MULTI-MODAL EVIDENCE:
    - Integrate splice predictions with AlphaGenome expression and chromatin data
-   - Assess whether AlphaGenome expression changes support splice predictions
-   - Consider tissue-specific effects from AlphaGenome analysis
-   - One sentence summary of integrated evidence
+   - Assess whether the expression pattern supports or contradicts splicing predictions
+   - Include a one-sentence summary of how these layers reinforce or weaken confidence
 
 3. CLINICAL SIGNIFICANCE:
-   - State whether this variant is likely significant based on ALL evidence
-   - Provide confidence level (High/Medium/Low) considering tool agreement
-   - Key reason supporting assessment using strongest evidence
+   - Is the variant likely to be clinically significant? Answer Yes/No and provide confidence (High/Medium/Low)
+   - Justify your assessment using the most reliable evidence source
 
-4. PATHOGENICITY ASSESSMENT:
-   - Explain how to test pathogenecity of the variant, include ACMG guideline
+4. PATHOGENICITY TESTING:
+   - Recommend a clinically relevant method to assess pathogenicity, citing ACMG classification where applicable
+   - Justify why this method is most appropriate for this variant
 
 5. EXPERIMENTAL PRIORITY:
-   - Assign priority level: High/Medium/Low
-   - Recommend the SINGLE most appropriate testing method and additional testing methods
-   - Specify optimal tissue/cell type considering AlphaGenome tissue predictions
-   - Consider which experimental approach would best validate the predictions
+   - Assign experimental priority: High, Medium, or Low
+   - Recommend one most informative test, based on combined prediction strength
+   - Specify preferred tissue/cell type based on AlphaGenome expression
+   - Briefly explain why this test is preferred for validation
 
 6. SUMMARY RECOMMENDATION:
-   - One clear action item for the curator
-   - Key consideration for experimental validation
-   - Note any important limitations or uncertainties
+   - One clear action for the curator
+   - Briefly explain what evidence supports this recommendation
+   - Note any limitations, uncertainty, or follow-up needed
 
 SCORING INTERPRETATION:
-- SpliceAI/Pangolin scores >0.2 are somewhat significant, >0.5 are significant, >0.8 are high confidence
-- AlphaGenome effect magnitudes >0.1 indicate significant tissue effects
-- AlphaGenome prediction differences show direction and magnitude of variant impact
-- When tools disagree, prioritize: (1) Tool agreement, (2) AlphaGenome multi-modal evidence, (3) Higher confidence scores
+- SpliceAI/Pangolin scores: >0.2 = moderate, >0.5 = strong, >0.8 = high confidence
+- AlphaGenome effect sizes >0.1 = significant expression or splicing impact
+- When tools disagree: prioritize (1) tool agreement, (2) AlphaGenome integration across expression/splice/chromatin, (3) highest confidence scores
 
-For experimental recommendations, choose only the most critical test based on the strongest prediction evidence.
-Keep each section to 2-3 sentences maximum. Focus on actionable insights rather than general explanations."""
+Avoid generic summaries. Always explain *why* a conclusion or test was chosen.
+"""
 
     return prompt
 

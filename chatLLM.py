@@ -18,7 +18,7 @@ class ChatLLM:
         self.pipeline = pipeline_instance
         self.conversation_history: List[Dict[str, str]] = []
         self.max_history_length = 5
-        self.max_response_tokens = 300
+        self.max_response_tokens = 500
         self.llm_analysis_results = None
     
     def start_chat(self) -> None:
@@ -618,7 +618,8 @@ When referencing previous analysis, be specific about what led to those conclusi
 
 USER QUESTION: {user_question}
 
-Please provide a helpful response based on the available multi-tool information about this variant."""
+Please provide a helpful response based on the available multi-tool information about this variant. 
+The response length should be appropriate for addressing the context and complexity of the informaton, with a maximum of 2000 words long."""
             
             # call OpenAI
             response = client.chat.completions.create(
